@@ -1,0 +1,102 @@
+name: Release
+
+# Push a tag vX.Y.Z (scripts/release.ps1 does it) to build the Nihilux Windows installer,
+# sign it for the in-app updater and publish it with latest.json to the GitHub Release.
+# Secrets: TAURI_SIGNING_PRIVATE_KEY, TAURI_SIGNING_PRIVATE_KEY_PASSWORD.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same npm (11) as development: npm 10 can reject a lock written by npm 11.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            desktop/package-lock.json
+
+      # Same CPython minor version as the bundled runtime (packaging/stage.ps1).
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements.lock.txt
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - name: Tag matches the app version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $versions = [ordered]@{
+            "desktop/src-tauri/tauri.conf.json" = (Get-Content desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+            "desktop/package.json" = (Get-Content desktop/package.json -Raw | ConvertFrom-Json).version
+            "desktop/src-tauri/Cargo.toml" = ([regex]::Match((Get-Content desktop/src-tauri/Cargo.toml -Raw), '(?m)^version = "([^"]+)"')).Groups[1].Value
+            "storyboard_tool/__init__.py" = ([regex]::Match((Get-Content storyboard_tool/__init__.py -Raw), '__version__ = "([^"]+)"')).Groups[1].Value
+          }
+          foreach ($entry in $versions.GetEnumerator()) {
+            if ("v$($entry.Value)" -ne $tag) { throw "tag $tag != $($entry.Key) version $($entry.Value) (run scripts/release.ps1)" }
+          }
+
+      - name: Frontend checks
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run lint
+          npm run build
+
+      - name: Stage installer contents
+        shell: pwsh
+        run: ./packaging/stage.ps1 -SkipFrontendBuild
+
+      # After staging, so the tests also exercise the bundled (LGPL) ffmpeg/ffprobe.
+      - name: Backend tests
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements.lock.txt
+          $env:PATH = "$PWD\packaging\stage\app\bin;$env:PATH"
+          python scripts/validate_migration.py
+          python -m pytest tests/ -q
+
+      - name: Release notes
+        id: notes
+        shell: pwsh
+        run: |
+          $file = "docs/releases/${{ github.ref_name }}.md"
+          $body = if (Test-Path $file) { Get-Content $file -Raw -Encoding UTF8 } else { "Nihilux ${{ github.ref_name }}" }
+          "body<<NIHILUX_NOTES_END`n$body`nNIHILUX_NOTES_END" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Desktop shell dependencies
+        working-directory: desktop
+        run: npm ci --no-audit --no-fund
+
+      - name: Build, sign and publish
+        uses: tauri-apps/tauri-action@action-v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: Nihilux ${{ github.ref_name }}
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: false
+          prerelease: false
+          args: --config src-tauri/tauri.release.conf.json
+          uploadUpdaterJson: true

@@ -1,5 +1,6 @@
 # Storyboarder — Current Architecture
 
+> Desktop update: 2026-10-28 (Tauri shell, installer and auto-update; see [plans/2026-10-28-nihilux-release-and-auto-update.md](plans/2026-10-28-nihilux-release-and-auto-update.md)).
 > Storage update: 2026-10-22 (one project format: folder + handle `.sbd`; see [plans/2026-10-22-single-project-format.md](plans/2026-10-22-single-project-format.md)).
 > Boundary update: 2026-10-03 (project editing ownership, scene service adapters, operation-local policies and reference metadata isolation).
 > Reflects the codebase after the desktop-only refactor, architecture cleanup,
@@ -13,7 +14,7 @@
 1. [Overview](#1-overview)
 2. [Desktop Launch Flow](#2-desktop-launch-flow)
 3. [Internal Server Flow](#3-internal-server-flow)
-4. [pywebview Shell](#4-pywebview-shell)
+4. [Desktop Shell](#4-desktop-shell)
 5. [React / Vite UI Bundle](#5-react--vite-ui-bundle)
 6. [FastAPI Route Layer](#6-fastapi-route-layer)
 7. [backend_service Role](#7-backend_service-role)
@@ -39,66 +40,74 @@
 
 ## 1. Overview
 
-Storyboarder is a **desktop-only** storyboarding application. There is no hosted server, no cloud sync, and no browser-accessible URL.
+Nihilux (internal name Storyboarder / Storyboard Tool) is a **desktop-only** storyboarding application. There is no hosted server, no cloud sync, and no browser-accessible URL.
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                          Desktop process                          │
-│                                                                   │
-│  main.py                                                          │
-│    └─ storyboard_tool/main.py                                     │
-│         ├─ create_app()   →  FastAPI app                          │
-│         └─ open_desktop_window()  →  pywebview window             │
-│                                          │                        │
-│                           http://127.0.0.1:PORT/                  │
-│                                          │                        │
-│  ┌───────────────────────────────────────┴───────────────────┐   │
-│  │                     FastAPI (uvicorn)                      │   │
-│  │  GET /              →  React SPA (dist/index.html)        │   │
-│  │  GET /react/*       →  Vite assets                        │   │
-│  │  GET /static/*      →  vendor + runtime bundle            │   │
-│  │  /api/*             →  StoryboardBackendService           │   │
-│  │  /api/plugin/*      →  Photoshop UXP plugin API           │   │
-│  │  /api/bridge/*      →  Photoshop live-bridge polling      │   │
-│  └────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
+┌────────────────────────────┐   spawns, token in env   ┌──────────────────────────────────────┐
+│ Nihilux.exe (Tauri 2)      │ ───────────────────────▶ │ python -m storyboard_tool.server     │
+│ desktop/src-tauri          │   reads PORT:<n>,        │   create_app(base_dir) → FastAPI     │
+│  - start-up page (splash)  │   polls /api/health      │   uvicorn on 127.0.0.1:<n>           │
+│  - updater, single instance│ ◀── POST /api/app/shutdown on exit / before update            │
+│  - window (WebView2) ──────┼── http://127.0.0.1:<n>/ ─▶  GET /  → React SPA (web/dist)       │
+└────────────────────────────┘                          │   /api/* → StoryboardBackendService  │
+                                                         │   /api/plugin/*, /api/bridge/*       │
+                                                         └──────────────────────────────────────┘
 ```
 
 **Runtime stack**
 
 | Layer | Technology |
 |---|---|
-| Desktop shell | pywebview (Chromium WebView on Windows) |
-| App server | FastAPI + uvicorn, loopback-only (`127.0.0.1`) |
+| Desktop shell | Tauri 2 (`desktop/src-tauri`, WebView2). Development alternative: the pywebview launcher (`storyboard_tool/desktop.py`) |
+| App server | FastAPI + uvicorn, loopback-only (`127.0.0.1`), per-launch API token |
 | Frontend | React 19 + TypeScript, built with Vite |
 | 3D engine | External Blender for authoring; Three.js for the automatic, read-only Scene3D preview |
-| Backend language | Python 3.11+ |
-| Image/media | Pillow, OpenCV-Python, psd-tools |
+| Backend language | Python 3.14 (bundled CPython in the installer) |
+| Image/media | Pillow, OpenCV-Python, psd-tools; ffmpeg/ffprobe (bundled LGPL build, else PATH) |
 
 ---
 
 ## 2. Desktop Launch Flow
 
+**Installed app / `tauri dev`** (`desktop/src-tauri/src/main.rs`):
+
 ```
-python main.py
-  └─ storyboard_tool.main.main()
-       ├─ create_app(base_dir)          # storyboard_tool/api.py
-       │    ├─ FastAPI instance
-       │    ├─ CORS + no-store middleware
-       │    ├─ Mount /static  (vendor & runtime)
-       │    ├─ Register all /api/* routes
-       │    └─ Start live-bridge refresh thread (1.5 s heartbeat)
-       │
-       └─ open_desktop_window(app)      # storyboard_tool/desktop.py
-            ├─ Set Windows AppUserModelID (taskbar identity)
-            ├─ Patch asyncio for Windows connection-reset noise
-            ├─ Start uvicorn on 127.0.0.1:PORT (background thread)
-            ├─ Wait for server ready (health-check poll)
-            ├─ webview.create_window("Storyboard Tool", "http://127.0.0.1:PORT/")
-            └─ webview.start()  →  blocks until window closes
+Nihilux.exe
+  ├─ window shows desktop/splash/index.html (start-up page, polls runtime_status)
+  ├─ layout: installed  = <install>/app (code) + <install>/python/python.exe,
+  │                       base dir %APPDATA%\StoryboardTool, logs %LOCALAPPDATA%\StoryboardTool\logs
+  │          checkout   = repo root, .venv (or NIHILUX_PYTHON), base dir = repo, logs = logs/
+  ├─ spawn python -m storyboard_tool.server --base-dir <dir>
+  │     env STORYBOARDER_LAUNCH_TOKEN=<random>, STORYBOARDER_WINDOW_PID=<shell pid>
+  │     └─ server.py: create_app → publish live bridge → uvicorn thread → print PORT:<n>
+  │                   (exits by itself if the shell process disappears)
+  ├─ wait for GET /api/health, then navigate the window to http://127.0.0.1:<n>/
+  └─ on exit: POST /api/app/shutdown (lifespan cleanup runs), kill only after 8 s
 ```
 
-There is no `--browser` mode. The internal server starts unconditionally and is never exposed outside loopback.
+The shell never ends the backend's whole process tree: Photoshop and Blender opened
+from the app are its children. Before installing an update (`prepare_for_update`) it
+stops the backend and then every process whose executable lives in the install folder
+(the backend, its ffmpeg, MCP servers on the bundled Python), so the installer can
+replace the files.
+
+`storyboard_tool/runtime_paths.py` decides the layout from the backend side: an
+installed `app/` folder carries `packaged.json` (written by `packaging/stage.ps1`);
+then the default base dir is `%APPDATA%\StoryboardTool` and `find_ffmpeg()` /
+`find_ffprobe()` prefer `app/bin`. `h264_encoder_args()` picks libx264 when the
+ffmpeg has it, else OpenH264 (the bundled LGPL build) or Media Foundation.
+
+**Development pywebview launcher** (`Storyboarder.vbs`, `run.bat`, `python main.py`):
+`storyboard_tool.main` → `create_app(cwd)` → `desktop.open_desktop_window()`, which
+starts the same server in a thread and opens a pywebview window. pywebview is not in the
+installer's runtime set.
+
+There is no `--browser` mode. The internal server is never exposed outside loopback.
+
+**Focus requests** (`POST /api/app/focus`, used by the Photoshop plugin):
+`window_focus.focus_process_window(app.state.window_pid)` finds the top-level window of
+the shell (or of the pywebview process) with Win32, restores it if minimized
+(`SW_RESTORE` returns it to maximized when it was) and activates it.
 
 ---
 
@@ -118,7 +127,9 @@ There is no `--browser` mode. The internal server starts unconditionally and is 
 | `/api/bridge/*` | Photoshop live-bridge polling and relink |
 | `/api/plugin/*` | Photoshop UXP plugin API (heartbeat, context, export, PSD save) |
 | `/api/export/*` | PDF, contact sheet, timing JSON, image sequence |
-| `/api/system/*` | Native file/folder dialogs (via pywebview) |
+| `/api/system/*` | Native file/folder dialogs (Tk dialogs in a helper process) |
+| `/api/health`, `/api/app/shutdown` | Desktop shell start-up check and graceful stop (token required) |
+| `/api/app/integrations*` | Settings → Integrations: MCP config, Photoshop `.ccx`, Blender add-on folder |
 | `/api/app/session` | UI session state (last project, selected shot, theme) |
 
 All `/api/*` handlers delegate immediately to `StoryboardBackendService`. No business logic lives in `api.py`.
@@ -129,14 +140,15 @@ A background daemon thread in `api.py` wakes every 1.5 seconds and refreshes `st
 
 ---
 
-## 4. pywebview Shell
+## 4. Desktop Shell
 
-`storyboard_tool/desktop.py` manages the native window lifecycle.
+`desktop/src-tauri` (Tauri 2, identifier `app.nihilux.desktop`, product name Nihilux).
 
-- Uses `webview.create_window()` with `http://127.0.0.1:PORT/` as the URL.
-- The WebView is Chromium-based on Windows (EdgeWebView2); it runs the same React code as a browser would.
-- System file dialogs (`/api/system/browse-*` routes) call back into pywebview's `create_file_dialog()` API from the server thread. This is the only place pywebview is called outside of window creation.
-- `desktop.py` does not expose any JavaScript bridge; all communication goes through the HTTP API. (The legacy pywebview `js_api` bridge — `DesktopBridge` in `bridge.py` — was unused by the React frontend and has been removed.)
+- The window first loads the bundled start-up page (`desktop/splash`), then the app from the backend's origin, so the React code and API calls stay same-origin (`apiBase()` is `''`).
+- Shell commands (`app_info`, `runtime_status`, `retry_backend`, `prepare_for_update`, `open_log_folder`) are declared in `build.rs` and allowed per origin by `capabilities/default.json` (start-up page) and `capabilities/app.json` (the app page on `http://127.0.0.1:*`).
+- Updates: `tauri-plugin-updater` reads `https://github.com/Rampageboo/Nihilux/releases/latest/download/latest.json` and checks the minisign signature against the public key in `tauri.conf.json`. The frontend (`frontend/src/desktop/AppUpdateProvider.tsx`) checks at start and every six hours when installed, downloads first, then calls `prepare_for_update`, installs and relaunches; `retry_backend` brings the backend back if installing fails. Settings → Updates and the start-up notice render only inside the shell.
+- Packaging: `packaging/stage.ps1` builds `packaging/stage/{app,python}`; `tauri.release.conf.json` maps them into the per-user NSIS installer (`createUpdaterArtifacts`, WebView2 bootstrapper). CI: `.github/workflows/release.yml`.
+- `storyboard_tool/desktop.py` remains the pywebview development launcher. Neither shell exposes a JavaScript bridge into Python; all app communication goes through the HTTP API.
 
 ---
 
@@ -892,7 +904,7 @@ The following were removed in the desktop-only and architecture-cleanup refactor
 The following are explicitly out of scope and not implemented:
 
 - Network-accessible server (all traffic is loopback only)
-- Browser-accessible UI (pywebview is the only supported client)
+- Browser-accessible UI (the desktop shell, or the pywebview dev launcher, is the only supported client)
 - Cloud sync or remote collaboration
 - Audio features or video export
 - Blender or Unreal live capture (Blender scene files can be opened; capture is not automated)
