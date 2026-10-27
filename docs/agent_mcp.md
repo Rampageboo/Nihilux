@@ -6,7 +6,7 @@ Start Storyboarder first. Otherwise every tool returns "Open Storyboarder with a
 
 ## Registration
 
-- **Claude Code:** the repo's `.mcp.json` runs `D:/Projects/Storyboarder/.venv/Scripts/python.exe -m storyboard_tool.mcp_server` with `PYTHONPATH` set to the repo. If the checkout lives elsewhere, edit both paths.
+- **Claude Code:** the repo's `.mcp.json` runs `D:/Projects/Nihilux/.venv/Scripts/python.exe -m storyboard_tool.mcp_server` with `PYTHONPATH` set to the repo. If the checkout lives elsewhere, edit both paths.
 - **Codex:** `.codex/config.toml` runs `scripts/storyboarder-mcp.cmd`.
 - **Shell, without MCP loaded:** `python scripts/mcp_call.py --list` lists the tools. `python scripts/mcp_call.py <tool> --args '{"shot_id": "..."}' --save-images-dir out/` calls one tool, prints its text, and saves any image results.
 
@@ -58,4 +58,4 @@ Lessons from agents that made shorts through this server.
 - **Quote sign text.** To get legible lettering, spell the exact words in quotes: `a shop sign that reads "OPEN 24 HOURS"`.
 - **Consistent characters.** Generate the first keyframe with text-to-image, then generate later boards with reference-to-image, passing board 1 as a reference (`references: ["<board 1 shot_id>"]`).
 - **Video take lengths.** Image-to-video takes are 1–5 s, and Wan rounds the frame count to 4n+1 at 16 fps, so a take runs slightly longer than asked (3.4 s → 3.56 s). `storyboard_render_sequence` trims takes back to their board durations by default.
-- **Calling from scripts on Windows.** From a Python subprocess, run the venv interpreter on `scripts/mcp_call.py` directly (`D:/Projects/Storyboarder/.venv/Scripts/python.exe scripts/mcp_call.py ...`), not through `bash`, which may resolve to WSL. `mcp_call.py` writes UTF-8, so non-ASCII titles print on a cp1252 console.
+- **Calling from scripts on Windows.** From a Python subprocess, run the venv interpreter on `scripts/mcp_call.py` directly (`D:/Projects/Nihilux/.venv/Scripts/python.exe scripts/mcp_call.py ...`), not through `bash`, which may resolve to WSL. `mcp_call.py` writes UTF-8, so non-ASCII titles print on a cp1252 console.
