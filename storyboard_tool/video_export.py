@@ -7,7 +7,6 @@ OpenCV's ``mp4v`` writer, mirroring the cv2/ffmpeg convention in ``video_utils``
 """
 from __future__ import annotations
 
-import shutil
 import math
 import subprocess
 import tempfile
@@ -15,6 +14,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
+from . import runtime_paths
 from .export_utils import numbered_shots
 from .models import Project, Shot
 from .shot_assets import render_shot_composite_image
@@ -69,7 +69,7 @@ def export_animatic(
     if _encode_cv2(frames, output_path, fps, width, height):
         return output_path
     raise RuntimeError(
-        "Video export requires ffmpeg on PATH or opencv-python-headless. "
+        "Video export requires ffmpeg (bundled, or on PATH) or opencv-python-headless. "
         "Install ffmpeg, or: pip install opencv-python-headless"
     )
 
@@ -106,7 +106,7 @@ def _draw_caption(frame: Image.Image, number: int, shot: Shot) -> None:
 
 
 def _encode_ffmpeg(frames: list[tuple[Image.Image, float]], output_path: Path, fps: int) -> bool:
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = runtime_paths.find_ffmpeg()
     if not ffmpeg:
         return False
     with tempfile.TemporaryDirectory(prefix="animatic-") as tmp:
@@ -130,7 +130,7 @@ def _encode_ffmpeg(frames: list[tuple[Image.Image, float]], output_path: Path, f
             "-f", "concat", "-safe", "0", "-i", "list.txt",
             "-vf", f"fps={fps},format=yuv420p",
             "-frames:v", str(sum(duration_frames(duration, fps) for _, duration in frames)),
-            "-c:v", "libx264", "-preset", "medium", "-movflags", "+faststart",
+            *runtime_paths.h264_encoder_args(ffmpeg), "-movflags", "+faststart",
             str(output_path.resolve()),
         ]
         result = subprocess.run(cmd, cwd=str(tmp_dir), capture_output=True, check=False)

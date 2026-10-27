@@ -263,7 +263,7 @@ def test_sequence_trims_takes_to_board_duration_by_default(tmp_path: Path) -> No
 def test_sequence_without_ffmpeg_fails_cleanly(tmp_path: Path, monkeypatch) -> None:
     client, _ids = _client(tmp_path, boards=1)
     real_which = shutil.which
-    monkeypatch.setattr("storyboard_tool.agent_views.shutil.which",
+    monkeypatch.setattr("storyboard_tool.runtime_paths.shutil.which",
                         lambda name: None if name in ("ffmpeg", "ffprobe") else real_which(name))
 
     response = client.post("/api/project/sequence/render", json={})

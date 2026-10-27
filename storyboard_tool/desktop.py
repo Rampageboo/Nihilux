@@ -1,3 +1,8 @@
+"""Development launcher: a pywebview window over the local server (run.bat, Storyboarder.vbs).
+
+The installed app uses the Tauri shell in ``desktop/src-tauri`` with
+``storyboard_tool.server`` instead; pywebview is not part of the installer.
+"""
 from __future__ import annotations
 
 import json
@@ -10,11 +15,8 @@ import threading
 import time
 from pathlib import Path
 
-import uvicorn
-
-from . import app_state, project_manager
-from .backend_service import _get_main_window_restore_state
-from .live_bridge import global_bridge_dir, resolve_server_port, server_identity_url
+from . import app_state, project_manager, server
+from .live_bridge import global_bridge_dir, resolve_server_port
 
 
 # The desktop shell starts a private localhost server for the React bundle and API.
@@ -70,106 +72,12 @@ def _configure_windows_taskbar_identity() -> None:
         pass
 
 
-def wait_for_server(host: str, port: int, timeout: float = 15.0) -> None:
-    deadline = time.time() + timeout
-    url = server_identity_url(host, port)
-    while time.time() < deadline:
-        try:
-            import urllib.request
-
-            with urllib.request.urlopen(url, timeout=1.0) as response:
-                if response.status == 200:
-                    return
-        except Exception:
-            # intentional: poll until the local server accepts connections
-            pass
-        time.sleep(0.1)
-    raise RuntimeError(f"Nihilux server did not start on http://{host}:{port}")
-
-
-def _configure_windows_asyncio_noise() -> None:
-    if sys.platform != "win32":
-        return
-    import asyncio
-    import asyncio.proactor_events
-
-    try:
-        asyncio.get_event_loop().set_exception_handler(_ignore_connection_reset)
-    except RuntimeError:
-        pass
-
-    transport_cls = getattr(asyncio.proactor_events, "_ProactorBasePipeTransport", None)
-    if transport_cls is None:
-        _LOGGER.warning("asyncio proactor transport patch skipped: _ProactorBasePipeTransport is unavailable")
-        return
-
-    if getattr(transport_cls, "_storyboard_patched", False):
-        return
-
-    _orig_call_connection_lost = getattr(transport_cls, "_call_connection_lost", None)
-    if _orig_call_connection_lost is None:
-        _LOGGER.warning("asyncio proactor transport patch skipped: _call_connection_lost is unavailable")
-        return
-
-    def _quiet_call_connection_lost(self, exc):
-        try:
-            _orig_call_connection_lost(self, exc)
-        except ConnectionResetError:
-            pass
-        except OSError as os_err:
-            if os_err.winerror in (10053, 10054):
-                pass
-            else:
-                raise
-        except Exception as inner_exc:
-            if isinstance(inner_exc, ConnectionResetError):
-                return
-            if isinstance(inner_exc, OSError) and getattr(inner_exc, "winerror", None) in (10053, 10054):
-                return
-            raise
-
-    transport_cls._call_connection_lost = _quiet_call_connection_lost
-    transport_cls._storyboard_patched = True
-
-
-def _ignore_connection_reset(loop, context) -> None:
-    exc = context.get("exception")
-    if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
-        return
-    if isinstance(exc, OSError) and getattr(exc, "winerror", None) in (10053, 10054):
-        return
-    message = str(context.get("message", ""))
-    if "_call_connection_lost" in message:
-        return
-    loop.default_exception_handler(context)
-
-
 def start_internal_server(app, host: str = _HOST, port: int = _PORT) -> tuple[threading.Thread, int]:
     """Start the private localhost server that pywebview loads. Not a public endpoint."""
     _log_stage("internal server thread starting")
-    if port <= 0:
-        port = resolve_server_port(host, port)
-    app.state.bridge_port = port
-    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
-    server = uvicorn.Server(config)
-
-    def run() -> None:
-        _configure_windows_asyncio_noise()
-        if sys.platform == "win32":
-            import asyncio
-
-            loop = asyncio.new_event_loop()
-            loop.set_exception_handler(_ignore_connection_reset)
-            asyncio.set_event_loop(loop)
-        server.run()
-
-    thread = threading.Thread(target=run, name="storyboard-server", daemon=True)
-    thread.start()
-    wait_for_server(host, port)
+    thread, port = server.start_internal_server(app, host, port)
     _log_stage("server ready")
     return thread, port
-
-
 
 
 def webview_storage_path() -> Path:
@@ -229,7 +137,6 @@ def open_desktop_window(app, title: str = "Nihilux") -> int:
     app.state.bridge_port = port
     publish(app.state.base_dir, None, port=port)
 
-    _configure_windows_asyncio_noise()
     start_internal_server(app, _HOST, port)
     _log_stage("pywebview window about to be created")
     react_index = Path(__file__).resolve().parent / "web" / "dist" / "index.html"
@@ -256,32 +163,24 @@ def open_desktop_window(app, title: str = "Nihilux") -> int:
         min_size=(1024, 680),
         text_select=False,
     )
-    app.state.main_window = window
-    initial_state = "maximized" if restore_maximized else "normal"
-    app.state.main_window_state = initial_state
-    app.state.main_window_restore_state = initial_state
+    # Focus requests find this window by process id (see window_focus).
+    app.state.window_pid = os.getpid()
+    # Last non-minimized state, saved on close for the next launch.
+    restore_state = {"value": "maximized" if restore_maximized else "normal", "minimized": False}
 
     def _mark_minimized(*_args):
-        # Preserve restore_state so the window returns to its prior state on un-minimize.
-        app.state.main_window_state = "minimized"
+        restore_state["minimized"] = True
 
     def _mark_maximized(*_args):
-        app.state.main_window_state = "maximized"
-        app.state.main_window_restore_state = "maximized"
+        restore_state["value"] = "maximized"
+        restore_state["minimized"] = False
 
     def _mark_restored(*_args):
-        previous_state = getattr(app.state, "main_window_state", "normal")
-        restore_target = getattr(app.state, "main_window_restore_state", "normal")
-        app.state.main_window_state = "normal"
-        # When coming from minimized-to-maximized, _focus_desktop_window follows
-        # restore() with maximize(), whose 'maximized' event sets both fields to
-        # "maximized". Don't clear restore_state here or that event would be a no-op.
-        if previous_state != "minimized" or restore_target != "maximized":
-            app.state.main_window_restore_state = "normal"
-
-    def _mark_shown(*_args):
-        if app.state.main_window_state not in {"maximized", "minimized"}:
-            app.state.main_window_state = "normal"
+        # Coming back from minimized keeps the earlier state; a restore from
+        # maximized is the user un-maximizing.
+        if not restore_state["minimized"]:
+            restore_state["value"] = "normal"
+        restore_state["minimized"] = False
 
     def _on_shown():
         if restore_maximized:
@@ -318,12 +217,11 @@ def open_desktop_window(app, title: str = "Nihilux") -> int:
     def _on_closing():
         # Window is still up here: save its state, then stop project writers
         # before the close proceeds.
-        _save_window_state(window, maximized=_get_main_window_restore_state(app) == "maximized")
+        _save_window_state(window, maximized=restore_state["value"] == "maximized")
         _finalize("window closing")
         return True
 
     window.events.shown += _on_shown
-    window.events.shown += _mark_shown
     try:
         window.events.closing += _on_closing
     except Exception:
@@ -358,6 +256,6 @@ def open_desktop_window(app, title: str = "Nihilux") -> int:
     if not finalized.is_set():
         # Use restore_state (not current_state) so closing while minimized persists
         # the correct pre-minimized geometry for the next launch.
-        _save_window_state(window, maximized=_get_main_window_restore_state(app) == "maximized")
+        _save_window_state(window, maximized=restore_state["value"] == "maximized")
         _finalize("post-start fallback")
     return 0

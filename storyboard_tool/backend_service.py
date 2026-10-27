@@ -25,6 +25,7 @@ from . import (
     session_store,
     shot_service,
     story_graph,
+    window_focus,
 )
 from .errors import AppErrorCode, app_error
 from .external_tools import preheat_photoshop
@@ -62,108 +63,6 @@ from .system_utils import (
 logger = logging.getLogger(__name__)
 
 _TOKEN_RE = re.compile(r'^[a-zA-Z0-9_-]{1,64}$')
-
-
-_VALID_WINDOW_STATES = frozenset({"normal", "maximized", "minimized"})
-_VALID_WINDOW_RESTORE_STATES = frozenset({"normal", "maximized"})
-
-
-def _set_main_window_state(app: Any, state: str) -> None:
-    """Set the application-owned runtime window state."""
-    if state in _VALID_WINDOW_STATES:
-        app.state.main_window_state = state
-
-
-def _get_main_window_state(app: Any) -> str:
-    """Return the application-owned runtime window state, defaulting to 'normal'."""
-    return getattr(app.state, "main_window_state", "normal")
-
-
-def _set_main_window_restore_state(app: Any, state: str) -> None:
-    """Set the state the window should restore to (normal or maximized only)."""
-    if state in _VALID_WINDOW_RESTORE_STATES:
-        app.state.main_window_restore_state = state
-
-
-def _get_main_window_restore_state(app: Any) -> str:
-    """Return the restore state (what to come back to after un-minimizing), defaulting to 'normal'."""
-    return getattr(app.state, "main_window_restore_state", "normal")
-
-
-def _focus_desktop_window(
-    window,
-    *,
-    window_state: str = "normal",
-    restore_state: str = "normal",
-) -> dict[str, Any]:
-    """Focus a pywebview window without changing its geometry.
-
-    window_state:   the current OS-tracked state (normal/maximized/minimized).
-    restore_state:  the pre-minimized state to return to on a successful restore.
-
-    Only calls restore() when window_state == 'minimized'. Never restores a
-    normal or maximized window. Uses show() as the activation request — on
-    Windows, show() performs Show + Activate. Does not call window.focus()
-    (pywebview uses 'focus' as a configuration value, not a callable method).
-    """
-    restored = False
-    shown = False
-    activation_requested = False
-    errors: list[str] = []
-
-    if window_state == "minimized":
-        restore_fn = getattr(window, "restore", None)
-        if callable(restore_fn):
-            try:
-                restore_fn()
-                restored = True
-            except Exception:
-                errors.append("restore_failed")
-                logger.debug("pywebview window.restore() failed during focus request", exc_info=True)
-
-    # pywebview restore() sets WindowState = FormWindowState.Normal on Windows —
-    # it does NOT return to the previous maximized state. Call maximize() explicitly
-    # so the OS window actually reaches the restore target.
-    remaximized = False
-    if restored and restore_state == "maximized":
-        maximize_fn = getattr(window, "maximize", None)
-        if callable(maximize_fn):
-            try:
-                maximize_fn()
-                remaximized = True
-            except Exception:
-                errors.append("maximize_failed")
-                logger.debug("pywebview window.maximize() failed during focus request", exc_info=True)
-
-    show_fn = getattr(window, "show", None)
-    if callable(show_fn):
-        try:
-            show_fn()
-            shown = True
-            activation_requested = True
-        except Exception:
-            errors.append("show_failed")
-            logger.debug("pywebview window.show() failed during focus request", exc_info=True)
-
-    if restored:
-        # remaximized=True → OS window is maximized; False → OS window is normal
-        # (either restore_state was "normal", or maximize() failed).
-        window_state_after = "maximized" if remaximized else "normal"
-    else:
-        window_state_after = window_state
-
-    return {
-        "ok": True,
-        "shown": shown,
-        "activation_requested": activation_requested,
-        "focused": activation_requested,
-        "restored_from_minimized": restored,
-        "remaximized": remaximized,
-        "window_state_before": window_state,
-        "window_restore_state_before": restore_state,
-        "window_state_after": window_state_after,
-        "errors": errors,
-    }
 
 
 _ANNOTATION_SHAPES = {"arrow", "line", "box", "circle", "highlight", "text"}
@@ -460,35 +359,8 @@ class StoryboardBackendService(
         return {"ok": True, "status": status, "job": job}
 
     def method_app_focus(self) -> dict[str, Any]:
-        """Best-effort desktop focus. Browser/dev mode is a clean no-op."""
-        window = getattr(self.app.state, "main_window", None)
-        window_state = _get_main_window_state(self.app)
-        restore_state = _get_main_window_restore_state(self.app)
-        if window is None:
-            return {
-                "ok": True,
-                "shown": False,
-                "activation_requested": False,
-                "focused": False,
-                "restored_from_minimized": False,
-                "remaximized": False,
-                "window_state_before": window_state,
-                "window_restore_state_before": restore_state,
-                "window_state_after": window_state,
-                "errors": [],
-            }
-        result = _focus_desktop_window(
-            window, window_state=window_state, restore_state=restore_state
-        )
-        if result.get("restored_from_minimized"):
-            state_after = result["window_state_after"]
-            _set_main_window_state(self.app, state_after)
-            # Keep restore_state in sync. In a real env, _mark_maximized sets it when
-            # remaximized=True; if remaximized=False (restore_state was "normal" or
-            # maximize failed), explicitly align restore_state to the actual window state.
-            if not result.get("remaximized"):
-                _set_main_window_restore_state(self.app, state_after)
-        return result
+        """Best-effort desktop focus. Without a known app window it is a clean no-op."""
+        return window_focus.focus_process_window(getattr(self.app.state, "window_pid", None))
 
     def method_preheat_photoshop(self) -> dict[str, Any]:
         project = self.app.state.project

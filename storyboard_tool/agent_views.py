@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import io
 import math
-import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -20,7 +19,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
-from . import comfy_cloud
+from . import comfy_cloud, runtime_paths
 from .models import Project, Shot
 from .project_layout import ProjectPathError, project_relative_posix, resolve_project_path, resolve_root_child
 from .shot_assets import render_shot_composite_image, resolve_shot_preview_path
@@ -335,7 +334,7 @@ def _take_video(project: Project, record: dict[str, Any]) -> Path | None:
 
 
 def _probe_seconds(path: Path) -> float:
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = runtime_paths.find_ffprobe()
     if not ffprobe:
         return 0.0
     result = subprocess.run(
@@ -350,9 +349,9 @@ def _probe_seconds(path: Path) -> float:
 
 def encode_sequence(segments: list[_Segment], size: tuple[int, int], output: Path) -> None:
     """One ffmpeg pass: scale/pad every source to ``size``, 16 fps, concat, H.264."""
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = runtime_paths.find_ffmpeg()
     if not ffmpeg:
-        raise RuntimeError("Sequence render requires ffmpeg on PATH.")
+        raise RuntimeError("Sequence render requires ffmpeg (bundled with the installed app, or on PATH).")
     width, height = size
     cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y"]
     filters: list[str] = []
@@ -372,7 +371,7 @@ def encode_sequence(segments: list[_Segment], size: tuple[int, int], output: Pat
     filters.append(f"{joined}concat=n={len(segments)}:v=1:a=0[out]")
     cmd += [
         "-filter_complex", ";".join(filters), "-map", "[out]", "-an",
-        "-c:v", "libx264", "-preset", "medium", "-pix_fmt", "yuv420p", "-r", str(SEQUENCE_FPS),
+        *runtime_paths.h264_encoder_args(ffmpeg), "-pix_fmt", "yuv420p", "-r", str(SEQUENCE_FPS),
         "-movflags", "+faststart", "-f", "mp4", str(output),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, check=False)

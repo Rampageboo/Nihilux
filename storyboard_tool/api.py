@@ -22,8 +22,10 @@ from . import (
     generation_service,
     logging_config,
     project_manager,
+    runtime_paths,
     runtime_state,
 )
+from . import __version__
 from .backend_service import StoryboardBackendService
 from .errors import AppErrorCode
 from .logging_config import setup_logging
@@ -315,7 +317,8 @@ def create_app(base_dir: Path, bridge_port: int = 8000) -> FastAPI:
     app.state.base_dir = base_dir
     app.state.project = None
     app.state.project_disk_mtime = 0.0
-    app.state.main_window = None
+    # Process that owns the app window (desktop shell or pywebview); see window_focus.
+    app.state.window_pid = None
     app.state.api_token = _read_launch_token()
     runtime_state.init_bridge_state(app, bridge_port)
 
@@ -437,6 +440,16 @@ def create_app(base_dir: Path, bridge_port: int = 8000) -> FastAPI:
             raise HTTPException(status_code=404, detail=_REACT_BUILD_HINT)
         return _react_index_response(react_dist, app.state.api_token)
 
+    @app.get("/api/health")
+    def health() -> dict[str, Any]:
+        # Polled by the desktop shell before it shows the window.
+        return {
+            "ok": True,
+            "app": "nihilux",
+            "version": __version__,
+            "packaged": runtime_paths.is_packaged(),
+        }
+
     @app.get("/api/project")
     def get_project() -> dict[str, Any]:
         return _svc().method_get_project()
@@ -468,6 +481,17 @@ def create_app(base_dir: Path, bridge_port: int = 8000) -> FastAPI:
     @app.post("/api/app/ui-ready")
     def ui_ready() -> dict[str, Any]:
         return _svc().method_ui_ready()
+
+    @app.post("/api/app/shutdown")
+    def shutdown_app() -> dict[str, Any]:
+        # The desktop shell stops the backend this way (on exit and before an
+        # update) so the lifespan cleanup runs. Only with a launch token: the
+        # token gate above is what keeps other local processes from calling it.
+        request_shutdown = getattr(app.state, "request_shutdown", None)
+        if not app.state.api_token or request_shutdown is None:
+            raise HTTPException(status_code=404, detail="Not available.")
+        request_shutdown()
+        return {"ok": True}
 
     @app.post("/api/app/focus")
     def focus_app() -> dict[str, Any]:

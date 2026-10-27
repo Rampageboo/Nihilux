@@ -15,7 +15,7 @@ with warnings.catch_warnings():
 
 from storyboard_tool import api as api_module
 from storyboard_tool import backend_service as backend_service_module
-from storyboard_tool import live_bridge
+from storyboard_tool import live_bridge, window_focus
 from storyboard_tool.plugin_service import (
     EXPLICIT_ASSET_PATHS_CAPABILITY,
     PLUGIN_PROTOCOL_VERSION,
@@ -221,31 +221,37 @@ class PhotoshopBridgeContractTests(unittest.TestCase):
     def test_app_focus_uses_desktop_window_when_available(self) -> None:
         calls: list[str] = []
 
-        class Window:
-            # Real pywebview surface: restore(), show(), maximize(); focus is not callable.
-            def restore(self) -> None:
+        class Api:
+            def find_window(self, pid: int) -> int:
+                calls.append(f"find:{pid}")
+                return 42
+
+            def is_minimized(self, hwnd: int) -> bool:
+                return False
+
+            def is_maximized(self, hwnd: int) -> bool:
+                return False
+
+            def restore(self, hwnd: int) -> None:
                 calls.append("restore")
 
-            def show(self) -> None:
-                calls.append("show")
+            def activate(self, hwnd: int) -> bool:
+                calls.append("activate")
+                return True
 
-            def maximize(self) -> None:
-                calls.append("maximize")
-
-        self.app.state.main_window = Window()
-        # Default window_state and restore_state are "normal" — restore and maximize must NOT be called.
-        response = self.client.post("/api/app/focus")
+        self.app.state.window_pid = 4321
+        window_focus.set_window_api(Api())
+        try:
+            response = self.client.post("/api/app/focus")
+        finally:
+            window_focus.set_window_api(None)
         self.assertEqual(response.status_code, 200)
         body = response.json()
         self.assertTrue(body["ok"])
-        self.assertTrue(body["activation_requested"])
-        self.assertNotIn("restore", calls)
-        self.assertNotIn("maximize", calls)
-        self.assertIn("show", calls)
+        self.assertTrue(body["focused"])
+        self.assertEqual(calls, ["find:4321", "activate"])
         self.assertFalse(body["restored_from_minimized"])
-        self.assertFalse(body["remaximized"])
         self.assertEqual(body["window_state_after"], "normal")
-        self.assertIn("window_restore_state_before", body)
 
     def test_preheat_photoshop_missing_path_is_clean_noop(self) -> None:
         with mock.patch.object(backend_service_module, "preheat_photoshop") as preheat:

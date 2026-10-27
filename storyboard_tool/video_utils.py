@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 from io import BytesIO
 from pathlib import Path
 
 from PIL import Image
+
+from . import runtime_paths
 
 
 def get_video_duration(path: Path) -> float:
@@ -89,7 +90,7 @@ def _read_frame_cv2(path: Path, seconds: float):
 
 
 def _extract_frame_ffmpeg(source: Path, seconds: float, destination: Path) -> bool:
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = runtime_paths.find_ffmpeg()
     if not ffmpeg:
         return False
     cmd = [
@@ -119,7 +120,7 @@ def _extract_frame_ffmpeg(source: Path, seconds: float, destination: Path) -> bo
 
 
 def _probe_duration_ffmpeg(path: Path) -> float:
-    ffprobe = shutil.which("ffprobe")
+    ffprobe = runtime_paths.find_ffprobe()
     if not ffprobe:
         return 0.0
     cmd = [
