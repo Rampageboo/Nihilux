@@ -121,6 +121,39 @@ folders, Layout 2) are not supported and will not open.
 
 Open **Canvas** in the top bar to choose a grayscale canvas color with the black-to-white brightness slider and hex input (default `#E8E8E8`). The color is saved in `settings.json`, used for new PSD canvases, shown on the in-app drawing canvas, and shared with the Photoshop UXP plugin through the backend context.
 
+## Install
+
+Download `Nihilux_<version>_x64-setup.exe` from the
+[latest release](https://github.com/Rampageboo/Nihilux/releases/latest) and run it.
+It installs for the current user (no administrator rights) into
+a per-user folder (by default `%LOCALAPPDATA%\Nihilux`) and needs nothing else:
+Python, ffmpeg, the Photoshop plugin and the Blender add-on are inside. WebView2 is
+installed from Microsoft if Windows lacks it.
+
+- **SmartScreen:** the installer is not code-signed yet, so Windows may show
+  "Windows protected your PC". Choose **More info → Run anyway**.
+- **First run:** the window shows a start-up page until the local backend answers,
+  then the Home screen. Your projects live wherever you create them; app state
+  (recent projects) is in `%APPDATA%\StoryboardTool`, logs in
+  `%LOCALAPPDATA%\StoryboardTool\logs`. Uninstalling keeps both.
+- **Updates:** the app checks GitHub at start and every six hours, and on
+  **Settings → Updates → Check for updates**. **Install and restart** downloads the
+  update, verifies its signature, closes the backend and installs it.
+- **Photoshop / Blender / agents:** **Settings → Integrations** installs the Photoshop
+  panel (`.ccx`, through Creative Cloud), opens the Blender add-on folder, and copies
+  an MCP config that lets Claude Code or Codex drive the installed app.
+
+Build the installer locally (Rust, Node 24 and the updater signing key needed):
+
+```powershell
+packaging\stage.ps1                       # bundled Python + deps, app code, frontend, ffmpeg, .ccx
+$env:TAURI_SIGNING_PRIVATE_KEY = Get-Content <key file> -Raw
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "<password>"
+cd desktop; npm ci; npm run build         # desktop\src-tauri\target\release\bundle\nsis\
+```
+
+Releases are built by GitHub Actions from a `vX.Y.Z` tag (`scripts\release.ps1`).
+
 ## Run from source (development)
 
 The installed app is the Nihilux desktop shell (`desktop/`, Tauri 2) with a

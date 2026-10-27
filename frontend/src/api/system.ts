@@ -119,3 +119,22 @@ export function browseProjectJson(): Promise<BrowseResult> {
 export function browseProjectSave(): Promise<BrowseResult> {
   return requestJson<BrowseResult>('/api/system/browse-project-save', { method: 'POST' })
 }
+
+export interface IntegrationsInfo {
+  packaged: boolean
+  /** Ready to paste into an MCP client config (Claude Code .mcp.json, Codex). */
+  mcp_config: { mcpServers: Record<string, unknown> }
+  /** The bundled .ccx (installed app) or the plugin source folder (checkout). */
+  photoshop_plugin: string
+  photoshop_plugin_kind: 'ccx' | 'folder' | ''
+  blender_addon_dir: string
+}
+
+export function getIntegrations(): Promise<IntegrationsInfo> {
+  return requestJson<IntegrationsInfo>('/api/app/integrations')
+}
+
+/** Opens the Photoshop plugin (.ccx installs through Creative Cloud) or shows the Blender add-on folder. */
+export function openIntegration(target: 'photoshop_plugin' | 'blender_addon'): Promise<{ ok: boolean; path: string }> {
+  return requestJson<{ ok: boolean; path: string }>('/api/app/integrations/open', { method: 'POST', body: { target } })
+}

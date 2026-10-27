@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { updateSettings } from '../api'
 import { useProject } from '../state/useProject'
 import { ComfyCloudSettings } from './ComfyCloudSettings'
+import { IntegrationsSettings } from './IntegrationsSettings'
 import { UpdatesSettings } from './UpdatesSettings'
 import './SettingsModal.css'
 
@@ -103,6 +104,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           ) : null}
 
           <ComfyCloudSettings />
+
+          <IntegrationsSettings />
 
           <UpdatesSettings />
 

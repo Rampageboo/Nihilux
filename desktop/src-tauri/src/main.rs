@@ -28,7 +28,7 @@ use std::{
     net::{SocketAddr, TcpStream},
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
-    sync::{mpsc, Mutex},
+    sync::{mpsc, Mutex, OnceLock},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager, Url};
@@ -94,7 +94,10 @@ impl Layout {
     }
 }
 
+static STARTED: OnceLock<Instant> = OnceLock::new();
+
 fn main() {
+    STARTED.get_or_init(Instant::now);
     tauri::Builder::default()
         // First: a second launch focuses the running window instead of starting a second backend.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -151,7 +154,7 @@ fn layout(app: &AppHandle) -> Result<Layout, String> {
             return Ok(Layout::Checkout { root: root.to_path_buf() });
         }
     }
-    if let Ok(resources) = app.path().resource_dir() {
+    if let Ok(resources) = app.path().resource_dir().map(plain_path) {
         let bundled = resources.join("app");
         if is_code_root(&bundled) {
             let roaming = std::env::var_os("APPDATA").map(PathBuf::from).ok_or("APPDATA is not set")?;
@@ -171,6 +174,16 @@ fn layout(app: &AppHandle) -> Result<Layout, String> {
         }
     }
     Err("Could not find the Nihilux backend (storyboard_tool/server.py).".into())
+}
+
+/// `\\?\C:\...` -> `C:\...`: the resource dir comes back as a verbatim path, which
+/// would leak into sys.executable and the MCP config the app hands out.
+fn plain_path(path: PathBuf) -> PathBuf {
+    let text = path.to_string_lossy().into_owned();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with(r"UNC\") => PathBuf::from(rest),
+        _ => path,
+    }
 }
 
 fn is_code_root(dir: &Path) -> bool {
@@ -199,6 +212,7 @@ fn start_backend(app: AppHandle) {
     std::thread::spawn(move || {
         let result = (|| -> Result<String, String> {
             let layout = layout(&app)?;
+            shell_log(&layout, "starting the backend");
             {
                 let runtime = app.state::<Runtime>();
                 let mut info = runtime.0.lock().expect("runtime lock");
@@ -207,12 +221,14 @@ fn start_backend(app: AppHandle) {
             }
             let token = random_token();
             let (child, port) = spawn_backend(&layout, &token)?;
+            shell_log(&layout, &format!("backend listening on port {port}"));
             {
                 let state = app.state::<BackendState>();
                 let mut backend = state.0.lock().expect("backend lock");
                 *backend = Backend { child: Some(child), port, token };
             }
             wait_for_health(port)?;
+            shell_log(&layout, "backend healthy");
             Ok(format!("http://127.0.0.1:{port}/"))
         })();
         match result {
@@ -312,6 +328,17 @@ fn spawn_backend(layout: &Layout, token: &str) -> Result<(Child, u16), String> {
                 return Err(format!("The backend stopped during start-up. Details: {}", log_path.display()));
             }
         }
+    }
+}
+
+/// Start-up milestones in `<logs>/shell.log`, to tell a slow start from a failed one.
+fn shell_log(layout: &Layout, message: &str) {
+    let dir = layout.log_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(dir.join("shell.log")) {
+        let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs_f64()).unwrap_or(0.0);
+        let since_start = STARTED.get().map(|t| t.elapsed().as_secs_f64()).unwrap_or(0.0);
+        let _ = writeln!(file, "{secs:.3} [{}] +{since_start:.2}s {message}", std::process::id());
     }
 }
 

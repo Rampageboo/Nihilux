@@ -20,6 +20,7 @@ from . import (
     app_state,
     blender_bridge,
     generation_service,
+    integrations,
     logging_config,
     project_manager,
     runtime_paths,
@@ -492,6 +493,19 @@ def create_app(base_dir: Path, bridge_port: int = 8000) -> FastAPI:
             raise HTTPException(status_code=404, detail="Not available.")
         request_shutdown()
         return {"ok": True}
+
+    @app.get("/api/app/integrations")
+    def get_integrations() -> dict[str, Any]:
+        return integrations.info()
+
+    @app.post("/api/app/integrations/open")
+    def open_integration(request: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return {"ok": True, "path": integrations.open_target(str(request.get("target", "")))}
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except OSError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     @app.post("/api/app/focus")
     def focus_app() -> dict[str, Any]:

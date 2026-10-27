@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
+    "publisher": "Rampageboo",
+    "copyright": "Nihilux contributors. MIT License; bundled components: THIRD_PARTY_NOTICES.md.",
+    "shortDescription": "Nihilux · 虚照 — storyboards, comics and AI video takes",
+    "resources": {
+      "../../packaging/stage/app/": "app/",
+      "../../packaging/stage/python/": "python/"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "embedBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "displayLanguageSelector": false,
+        "installerIcon": "../../storyboard_tool/assets/icon.ico"
+      }
+    }
+  }
+}
