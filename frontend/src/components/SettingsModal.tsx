@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import { updateSettings } from '../api'
 import { useProject } from '../state/useProject'
 import { ComfyCloudSettings } from './ComfyCloudSettings'
+import { UpdatesSettings } from './UpdatesSettings'
 import './SettingsModal.css'
 
 interface SettingsModalProps {
@@ -45,7 +46,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }, [project, canvasColor, preheatPhotoshop, flushDirtyShots, setProject, reportError])
 
-  if (!open || !project) return null
+  if (!open) return null
 
   const disabled = saving || projectActionBusy
 
@@ -61,7 +62,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         <div className="settings-modal-header">
           <div>
             <h2 id="settings-modal-title">Settings</h2>
-            <p>Document defaults and local application behavior.</p>
+            <p>{project ? 'Document defaults and local application behavior.' : 'Local application behavior.'}</p>
           </div>
           <button type="button" className="settings-modal-close" onClick={closeModal} aria-label="Close settings">
             x
@@ -69,6 +70,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         </div>
 
         <div className="settings-modal-body">
+          {project ? (
+          <>
           <label className="settings-field">
             <span>Canvas background color</span>
             <div className="settings-color-row">
@@ -96,19 +99,25 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             />
             <span>Preheat Photoshop when Nihilux opens</span>
           </label>
+          </>
+          ) : null}
 
           <ComfyCloudSettings />
+
+          <UpdatesSettings />
 
         </div>
 
         <div className="settings-modal-footer">
           {note ? <span className="settings-note">{note}</span> : null}
           <button type="button" onClick={closeModal} disabled={disabled}>
-            Cancel
+            {project ? 'Cancel' : 'Close'}
           </button>
-          <button type="button" className="primary" onClick={() => void saveSettings()} disabled={disabled}>
-            {saving ? 'Saving...' : 'Save settings'}
-          </button>
+          {project ? (
+            <button type="button" className="primary" onClick={() => void saveSettings()} disabled={disabled}>
+              {saving ? 'Saving...' : 'Save settings'}
+            </button>
+          ) : null}
         </div>
       </section>
     </div>

@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The bundled start-up page (desktop/splash) while the backend starts.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "window-state:default",
+    "allow-runtime-status",
+    "allow-retry-backend",
+    "allow-open-log-folder"
+  ]
+}

@@ -8,7 +8,7 @@ It provides a structured workspace for planning shots, managing visual reference
 
 ## Developer Documentation
 
-- [Current Architecture](docs/current_architecture.md) — desktop launch flow, internal server, pywebview shell, React/Vite bundle, FastAPI routes, backend_service, shot_service, project_manager, project_transaction safety, Scene3D TypeScript source, generated-files policy, and deleted legacy artifacts.
+- [Current Architecture](docs/current_architecture.md) — desktop launch flow (Tauri shell), internal server, React/Vite bundle, FastAPI routes, backend_service, shot_service, project_manager, project_transaction safety, Scene3D TypeScript source, generated-files policy, and deleted legacy artifacts.
 
 ## Features
 
@@ -121,16 +121,33 @@ folders, Layout 2) are not supported and will not open.
 
 Open **Canvas** in the top bar to choose a grayscale canvas color with the black-to-white brightness slider and hex input (default `#E8E8E8`). The color is saved in `settings.json`, used for new PSD canvases, shown on the in-app drawing canvas, and shared with the Photoshop UXP plugin through the backend context.
 
-## Run
+## Run from source (development)
 
-```bash
-pip install -r requirements.txt
-python main.py
+The installed app is the Nihilux desktop shell (`desktop/`, Tauri 2) with a
+bundled Python; see [Install](#install). From a checkout there are two ways to
+run it:
+
+**Desktop shell** (the same shell the installer ships; needs Rust and Node):
+
+```powershell
+python -m venv .venv; .venv\Scripts\pip install -r requirements.lock.txt
+cd frontend; npm ci; npm run build; cd ..      # the backend serves storyboard_tool/web/dist
+cd desktop; npm ci; npm run dev                # tauri dev: starts the backend from .venv
 ```
 
-This opens a **desktop app window** via pywebview. The local FastAPI server is an internal implementation detail; do not open the app in a system browser.
+The shell starts `python -m storyboard_tool.server` from the checkout's `.venv`
+(or the interpreter in `NIHILUX_PYTHON`), waits for `/api/health` and opens the
+app. Per-user state stays in the checkout (`Sessions/`), logs go to `logs/`.
+Settings → Updates is shown, but a development build does not check on its own.
 
-The app stores each project as a folder with a small `.sbd` handle (see Project Structure). New/Open Project dialogs use native file pickers handled by the internal server.
+**pywebview launcher** (`Storyboarder.vbs`, `run.bat`, `python main.py`):
+development only, kept because it needs no Rust toolchain. It creates `.venv`,
+installs `requirements.lock.txt` and opens a pywebview window. pywebview is not
+part of the installer.
+
+The local FastAPI server is an internal implementation detail; do not open the app
+in a system browser. Projects are folders with a small `.sbd` handle (see Project
+Structure). New/Open Project dialogs use native file pickers handled by the server.
 
 ## Roadmap
 

@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent.parent
 STATIC = ROOT.parent / "web" / "static"
 FRONTEND_PUBLIC = REPO / "frontend" / "public"
+SPLASH = REPO / "desktop" / "splash"
 MASTER = ROOT / "icon_master.png"
 
 CORNER_RATIO = 0.22
@@ -46,11 +47,12 @@ def main() -> None:
 
     icon.save(ROOT / "icon.png", format="PNG")
     icon.save(STATIC / "favicon.png", format="PNG")
+    icon.save(SPLASH / "icon.png", format="PNG")  # desktop shell start-up page
     for target in (ROOT / "icon.ico", STATIC / "favicon.ico"):
         icon.save(target, format="ICO", sizes=ICO_SIZES)
     rounded(master, 64).save(FRONTEND_PUBLIC / "favicon.png", format="PNG")
     rounded(master, 128).save(FRONTEND_PUBLIC / "brand-mark.png", format="PNG")
-    print(f"Wrote icons to {ROOT}, {STATIC} and {FRONTEND_PUBLIC}")
+    print(f"Wrote icons to {ROOT}, {STATIC}, {SPLASH} and {FRONTEND_PUBLIC}")
 
 
 if __name__ == "__main__":

@@ -184,3 +184,20 @@
 .settings-key-state.is-set {
   color: var(--ok);
 }
+
+.settings-hint.is-error {
+  color: var(--danger-text);
+}
+
+.settings-release-notes {
+  max-height: 140px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg-input);
+  font: inherit;
+  font-size: 12px;
+  white-space: pre-wrap;
+}

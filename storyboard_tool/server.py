@@ -126,6 +126,33 @@ def start_internal_server(app, host: str = HOST, port: int = 0) -> tuple[threadi
     return thread, port
 
 
+def watch_window_process(pid: int, server) -> None:
+    """Stop the server when the shell that owns the window is gone (crash, kill).
+
+    Without this a killed shell would leave an orphaned backend holding files in
+    the install folder. Windows only; a no-op elsewhere.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    synchronize = 0x00100000
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(synchronize, False, int(pid))
+    if not handle:
+        return
+
+    def wait() -> None:
+        try:
+            kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
+        finally:
+            kernel32.CloseHandle(handle)
+        _LOGGER.warning("Window process %s ended; stopping the backend", pid)
+        server.should_exit = True
+
+    threading.Thread(target=wait, name="storyboard-window-watch", daemon=True).start()
+
+
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="python -m storyboard_tool.server")
     parser.add_argument("--base-dir", type=Path, default=None,
@@ -169,6 +196,8 @@ def main(argv: list[str] | None = None) -> int:
 
     server = build_server(app, HOST, port)
     thread = run_server_in_thread(server)
+    if window_pid:
+        watch_window_process(window_pid, server)
     try:
         wait_for_server(HOST, port, timeout=60.0)
     except RuntimeError as exc:

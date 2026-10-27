@@ -69,3 +69,20 @@
   place-items: center;
   color: var(--text-3);
 }
+
+.app-banner.app-banner-info {
+  background: rgba(124, 139, 180, 0.12);
+  border-bottom-color: rgba(124, 139, 180, 0.32);
+  color: var(--color-text);
+}
+
+.app-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.app-banner-actions > button.primary {
+  min-height: 26px;
+  padding: 0 10px;
+}

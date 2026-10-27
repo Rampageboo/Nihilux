@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nihilux</title>
+  <style>
+    :root { color-scheme: dark; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      background: #111318; color: #d8dbe2;
+      font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+      user-select: none;
+    }
+    main { width: min(520px, 90vw); text-align: center; }
+    img { width: 96px; height: 96px; }
+    h1 { margin: 12px 0 4px; font-size: 22px; font-weight: 600; letter-spacing: .02em; }
+    #status { margin: 0; color: #9aa1ad; min-height: 1.5em; }
+    #error { display: none; margin-top: 16px; padding: 12px; border-radius: 6px; text-align: left;
+      background: #2a1d20; color: #f0c4c4; white-space: pre-wrap; word-break: break-word; user-select: text; }
+    .actions { display: none; margin-top: 12px; gap: 8px; justify-content: center; }
+    button { padding: 6px 14px; border: 1px solid #3a3f4b; border-radius: 6px; background: #1d2028;
+      color: inherit; font: inherit; cursor: pointer; }
+    button:hover { background: #262a34; }
+    .bar { height: 2px; margin: 18px auto 0; width: 160px; overflow: hidden; background: #22262e; border-radius: 2px; }
+    .bar::after { content: ""; display: block; height: 100%; width: 40%; background: #7c8bb4;
+      animation: slide 1.2s ease-in-out infinite; }
+    @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+    body.failed .bar { display: none; }
+    body.failed #error { display: block; }
+    body.failed .actions { display: flex; }
+  </style>
+</head>
+<body>
+  <main>
+    <img src="icon.png" alt="">
+    <h1>Nihilux</h1>
+    <p id="status">Starting…</p>
+    <div class="bar"></div>
+    <div id="error"></div>
+    <div class="actions">
+      <button id="retry" type="button">Try again</button>
+      <button id="logs" type="button">Open log folder</button>
+    </div>
+  </main>
+  <script>
+    // Shown by the desktop shell while it starts the backend; the shell then loads the app.
+    const invoke = (cmd) => window.__TAURI_INTERNALS__.invoke(cmd);
+    const messages = {
+      starting: 'Starting…',
+      'stopped-for-update': 'Installing the update…',
+      failed: 'Nihilux could not start.',
+    };
+    async function poll() {
+      try {
+        const status = await invoke('runtime_status');
+        document.getElementById('status').textContent = messages[status.phase] || 'Starting…';
+        document.body.classList.toggle('failed', status.phase === 'failed');
+        document.getElementById('error').textContent = status.error || '';
+      } catch (error) {
+        document.getElementById('status').textContent = String(error);
+      }
+      setTimeout(poll, 300);
+    }
+    document.getElementById('retry').onclick = () => invoke('retry_backend');
+    document.getElementById('logs').onclick = () => invoke('open_log_folder');
+    if (window.__TAURI_INTERNALS__) poll();
+  </script>
+</body>
+</html>

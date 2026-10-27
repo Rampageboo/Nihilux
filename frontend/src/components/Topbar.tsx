@@ -247,7 +247,11 @@ export function Topbar({
               <GearSix size={17} />
             </button>
           </>
-        ) : null}
+        ) : (
+          <button type="button" className="ghost icon-btn" aria-label="Settings" title="Settings" disabled={busy} onClick={onOpenSettings}>
+            <GearSix size={17} />
+          </button>
+        )}
       </div>
     </header>
   )

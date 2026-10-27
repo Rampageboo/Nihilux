@@ -11,6 +11,8 @@ import { Scene2DPanel } from './components/Scene2DPanel'
 import { Scene3DPanel } from './components/Scene3DPanel'
 import { SettingsModal } from './components/SettingsModal'
 import { ExportModal } from './components/ExportModal'
+import { UpdateNotice } from './components/UpdateNotice'
+import { AppUpdateProvider } from './desktop/AppUpdateProvider'
 import { ProjectProvider } from './state/ProjectContext'
 import { useProject } from './state/useProject'
 import { LiveBridgeProvider } from './state/LiveBridgeContext'
@@ -88,6 +90,7 @@ function AppInner() {
           </button>
         </div>
       ) : null}
+      <UpdateNotice />
       <div className="workspace-shell">
         <div className={`workspace workspace-${workspaceMode}`}>
           {initialLoading ? (
@@ -122,10 +125,12 @@ function AppInner() {
 
 export default function App() {
   return (
-    <ProjectProvider>
-      <LiveBridgeProvider>
-        <AppInner />
-      </LiveBridgeProvider>
-    </ProjectProvider>
+    <AppUpdateProvider>
+      <ProjectProvider>
+        <LiveBridgeProvider>
+          <AppInner />
+        </LiveBridgeProvider>
+      </ProjectProvider>
+    </AppUpdateProvider>
   )
 }
