@@ -14,6 +14,7 @@ from PIL import Image
 
 from storyboard_tool import comfy_cloud
 from storyboard_tool.api import create_app
+from storyboard_tool.runtime_paths import h264_encoder_args
 from storyboard_tool.project_layout import generation_metadata_path, generation_video_relative, resolve_project_path
 
 FFMPEG = shutil.which("ffmpeg")
@@ -60,7 +61,7 @@ def _fake_take(client: TestClient, shot_id: str, seconds: float, *, status: str 
         subprocess.run([
             FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi",
             "-i", f"testsrc=size={size[0]}x{size[1]}:rate=16:duration={seconds}",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(target),
+            *h264_encoder_args(FFMPEG), "-pix_fmt", "yuv420p", str(target),
         ], check=True)
     record = {
         "schema_version": 1, "take_id": take_id, "shot_id": shot_id, "status": status,
