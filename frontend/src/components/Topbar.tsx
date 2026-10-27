@@ -24,9 +24,7 @@ function shortShotId(shotId: string) {
 
 function BrandMark() {
   return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg viewBox="0 0 16 16"><rect x="2" y="3.5" width="5" height="9" rx="1" /><rect x="9" y="3.5" width="5" height="9" rx="1" /></svg>
-    </span>
+    <img className="brand-mark" src={`${import.meta.env.BASE_URL}brand-mark.png`} alt="" aria-hidden="true" draggable={false} />
   )
 }
 
@@ -211,7 +209,7 @@ export function Topbar({
             <SaveState />
           </>
         ) : (
-          <span className="topbar-app-name">Storyboarder</span>
+          <span className="topbar-app-name">Nihilux</span>
         )}
       </div>
 

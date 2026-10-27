@@ -94,7 +94,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               onChange={(event) => setPreheatPhotoshop(event.target.checked)}
               disabled={disabled}
             />
-            <span>Preheat Photoshop when Storyboarder opens</span>
+            <span>Preheat Photoshop when Nihilux opens</span>
           </label>
 
           <ComfyCloudSettings />

@@ -366,7 +366,7 @@ export function FloatingLayersPanel({
     try {
       const response = await deleteGenerationRequest(requestId)
       if (response.requests.some((request) => request.request_id === requestId)) {
-        throw new Error('Storyboarder could not remove this queue item.')
+        throw new Error('Nihilux could not remove this queue item.')
       }
       replaceWithCurrentSelection(response.project)
       setRequests(response.requests)

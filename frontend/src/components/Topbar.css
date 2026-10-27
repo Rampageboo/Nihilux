@@ -33,17 +33,8 @@
   height: 26px;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
-  background: var(--accent);
-  display: grid;
-  place-items: center;
-}
-
-.brand-mark svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: var(--accent-ink);
-  stroke-width: 1.8;
+  object-fit: cover;
+  display: block;
 }
 
 .topbar-app-name {

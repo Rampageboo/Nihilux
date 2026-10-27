@@ -84,7 +84,7 @@ def wait_for_server(host: str, port: int, timeout: float = 15.0) -> None:
             # intentional: poll until the local server accepts connections
             pass
         time.sleep(0.1)
-    raise RuntimeError(f"Storyboard Tool server did not start on http://{host}:{port}")
+    raise RuntimeError(f"Nihilux server did not start on http://{host}:{port}")
 
 
 def _configure_windows_asyncio_noise() -> None:
@@ -209,7 +209,7 @@ def _save_window_state(window, maximized: bool = False) -> None:
         pass
 
 
-def open_desktop_window(app, title: str = "Storyboard Tool") -> int:
+def open_desktop_window(app, title: str = "Nihilux") -> int:
     _log_stage("desktop process entered open_desktop_window")
     try:
         import webview
