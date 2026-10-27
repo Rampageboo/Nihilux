@@ -3,7 +3,9 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import tempfile
+import time
 import unittest
 import warnings
 from pathlib import Path
@@ -137,6 +139,10 @@ class PhotoshopBridgeContractTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        # The newer heartbeat wins. On a fast machine the file can land in the same
+        # clock tick as the HTTP heartbeat, so date it clearly after.
+        later = time.time() + 2
+        os.utime(live_bridge.plugin_heartbeat_file_path(), (later, later))
 
         status = self.client.get("/api/bridge/status").json()
         self.assertTrue(status["plugin_linked"])
