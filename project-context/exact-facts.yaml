@@ -26,7 +26,7 @@ codebase_map:
     - "excluded: protocol files, docs/, agent-workflows/, all images"
   build_mode: "AST structural extraction only; no semantic pass, no LLM tokens"
   data_boundary: "fully local; nothing transmitted to any external service"
-  artifact_git_policy: "graphify-out/* ignored; GRAPH_REPORT.md tracked"
+  artifact_git_policy: "graphify-out/ ignored (local only)"
   map_maintainer_role: implementer
   freshness_acceptor_role: integration-acceptor
   update_trigger: manual
