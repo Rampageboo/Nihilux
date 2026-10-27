@@ -67,6 +67,11 @@ jobs:
       # After staging, so the tests also exercise the bundled (LGPL) ffmpeg/ffprobe.
       - name: Backend tests
         shell: pwsh
+        # The runner's default TEMP is an 8.3 short path (C:\Users\RUNNER~1\...), while
+        # the app resolves project paths to long form; keep the tests on a long path.
+        env:
+          TEMP: ${{ runner.temp }}
+          TMP: ${{ runner.temp }}
         run: |
           python -m pip install --disable-pip-version-check -r requirements.lock.txt
           $env:PATH = "$PWD\packaging\stage\app\bin;$env:PATH"
