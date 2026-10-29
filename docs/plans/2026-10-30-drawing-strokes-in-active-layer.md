@@ -20,4 +20,4 @@ New pen/eraser paths now belong to a persistent Fabric drawing-layer group. The 
 
 This verifies the editor component with simulated storage, not an installed Tauri build or a production backend save. Existing per-stroke layers are preserved rather than automatically merged. Other viewports and actual tablet pressure were not tested. The earlier whole-backend Blender/path environment limitation remains tracked separately.
 
-Owner direction remains: do not publish. No push, release, installation or user drawing modification is part of this fix.
+At implementation handoff, Owner paused publication. Owner subsequently authorized publishing v0.1.1, including this fix and DEV-9. App installation and real-device acceptance remain separate.

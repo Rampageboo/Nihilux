@@ -1,6 +1,6 @@
 # To-do: rename the agent MCP surface to Nihilux
 
-Status: source implemented and validated locally on 2026-10-30; full gate has one documented environment-dependent failure, passing in an isolated normal-path rerun. Shared skill synchronized and pushed; publication paused by Owner; installed-app acceptance pending. Baseline: 42a68a8; branch: codex/nihilux-mcp-rename.
+Status: source implemented and validated locally on 2026-10-30; full gate has one documented environment-dependent failure, passing in an isolated normal-path rerun. Shared skill synchronized and pushed; Owner has resumed authorization to publish v0.1.1 with DEV-16; installed-app acceptance pending. Baseline: 42a68a8; implementation branch: codex/nihilux-mcp-rename.
 
 Original problem (before this change): the app is called Nihilux, but its MCP still presented the old name.
 - The server reports `serverInfo.name` as `storyboarder` (`storyboard_tool/mcp_server.py`, `SERVER_NAME`).
