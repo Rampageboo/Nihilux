@@ -1,4 +1,4 @@
-"""STDIO MCP server that lets an agent use the running Storyboarder app.
+"""STDIO MCP server that lets an agent use the running Nihilux app.
 
 The server is a thin HTTP client of the desktop backend: it discovers the running
 app from the live-bridge file (base URL + per-launch API token) and maps each MCP
@@ -23,13 +23,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-SERVER_NAME = "storyboarder"
+SERVER_NAME = "nihilux"
 SERVER_VERSION = "0.2.0"
 SUPPORTED_PROTOCOLS = ("2025-06-18", "2025-03-26", "2024-11-05")
 
 TOKEN_HEADER = "x-storyboarder-token"
-NOT_RUNNING = "Open Storyboarder with a project first."
-NO_PROJECT = "No project is open: start one with storyboard_new_project or open one with storyboard_open_project (storyboard_recent_projects lists recent ones)."
+NOT_RUNNING = "Open Nihilux first, then open a project."
+NO_PROJECT = "No project is open: start one with nihilux_new_project or open one with nihilux_open_project (nihilux_recent_projects lists recent ones)."
 GRID_MAX_EDGE = 1600
 BOARD_MAX_EDGE = 1280
 MAX_GENERATION_ARTIFACTS = 8
@@ -151,16 +151,16 @@ class StoryboarderClient:
         try:
             bridge = json.loads(Path(path).read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            raise ToolError(f"Storyboarder is not running (no live bridge at {path}). {NOT_RUNNING}") from exc
+            raise ToolError(f"Nihilux is not running (no live bridge at {path}). {NOT_RUNNING}") from exc
         if not isinstance(bridge, dict) or not bridge.get("app_running"):
-            raise ToolError(f"Storyboarder is not running. {NOT_RUNNING}")
+            raise ToolError(f"Nihilux is not running. {NOT_RUNNING}")
         parsed = urllib.parse.urlsplit(str(bridge.get("bridge_url") or ""))
         if parsed.scheme and parsed.netloc:
             base = f"{parsed.scheme}://{parsed.netloc}"
         elif bridge.get("port"):
             base = f"http://127.0.0.1:{int(bridge['port'])}"
         else:
-            raise ToolError(f"The Storyboarder live bridge has no address. {NOT_RUNNING}")
+            raise ToolError(f"The Nihilux live bridge has no address. {NOT_RUNNING}")
         return base, str(bridge.get("api_token") or "")
 
     def request(
@@ -192,7 +192,7 @@ class StoryboarderClient:
         try:
             response = self.transport(method, base + path, headers, body, HTTP_TIMEOUT_SECONDS)
         except TransportUnavailable as exc:
-            raise ToolError(f"Storyboarder is not reachable at {base} ({exc}). {NOT_RUNNING}") from exc
+            raise ToolError(f"Nihilux is not reachable at {base} ({exc}). {NOT_RUNNING}") from exc
         if response.status >= 400:
             raise ToolError(_error_text(method, path, response))
         return response
@@ -215,7 +215,7 @@ def _error_text(method: str, path: str, response: HttpResponse) -> str:
     if not isinstance(detail, str):
         detail = json.dumps(detail, ensure_ascii=False)
     if response.status in {404, 405} and detail in {"Not Found", "Method Not Allowed"}:
-        detail += " (this Storyboarder version may not have this endpoint yet)"
+        detail += " (this Nihilux version may not have this endpoint yet)"
     if detail == "No project opened.":
         detail += f" {NO_PROJECT}"
     return f"{method} {path} failed with HTTP {response.status}: {detail}"
@@ -559,7 +559,7 @@ def tool_submit_generation_result(client: StoryboarderClient, args: dict[str, An
     response = client.json("submit_generation_result", params={"request_id": request_id}, multipart=upload)
     return {
         **response,
-        "next_step": "Storyboarder imports this candidate into the matching board for review.",
+        "next_step": "Nihilux imports this candidate into the matching board for review.",
     }
 
 
@@ -580,7 +580,7 @@ def _schema(properties: dict[str, Any] | None = None, required: list[str] | None
 
 
 _STR = {"type": "string"}
-_SHOT_ID = {"type": "string", "description": "Board id (shot_id) from storyboard_outline."}
+_SHOT_ID = {"type": "string", "description": "Board id (shot_id) from nihilux_outline."}
 _ROUTE_ID = {"type": "string", "description": "Story route id; omit for the main route."}
 _BOARD_FIELDS: dict[str, Any] = {
     "title": _STR,
@@ -618,10 +618,10 @@ class Tool:
 
 
 TOOL_LIST: list[Tool] = [
-    Tool("storyboard_status", "Is Storyboarder running, which project is open, how many boards, and is Comfy Cloud configured. Free.",
+    Tool("nihilux_status", "Is Nihilux running, which project is open, how many boards, and is Comfy Cloud configured. Free.",
          _schema(), _READ, tool_status),
-    Tool("storyboard_new_project",
-         "Create a new project and open it in the user's Storyboarder window, replacing the project shown there (the current one is saved first). "
+    Tool("nihilux_new_project",
+         "Create a new project and open it in the user's Nihilux window, replacing the project shown there (the current one is saved first). "
          "path is the requested <parent>/<Name>.sbd; <parent> must exist; the app creates the folder <parent>/<Name>/ holding <Name>.sbd. Returns name, project_path and board_count. Free.",
          _schema({
              "path": {"type": "string", "description": "Requested document path, e.g. D:/Boards/MyFilm.sbd (creates D:/Boards/MyFilm/MyFilm.sbd)."},
@@ -629,38 +629,38 @@ TOOL_LIST: list[Tool] = [
              "canvas_width": {"type": "integer", "minimum": 1, "description": "Board canvas width in px (default 1920)."},
              "canvas_height": {"type": "integer", "minimum": 1, "description": "Board canvas height in px (default 1080)."},
          }, ["path"]), {**_WRITE, "idempotentHint": False}, tool_new_project),
-    Tool("storyboard_open_project",
-         "Open an existing project in the user's Storyboarder window, replacing the project shown there (the current one is saved first). Returns name, project_path and board_count. Free.",
+    Tool("nihilux_open_project",
+         "Open an existing project in the user's Nihilux window, replacing the project shown there (the current one is saved first). Returns name, project_path and board_count. Free.",
          _schema({"path": {"type": "string", "description": "A .sbd document or a project folder."}}, ["path"]),
          _WRITE, tool_open_project),
-    Tool("storyboard_recent_projects", "Recently opened projects (name, path to pass to storyboard_open_project, board count, last modified, whether it still exists). Free.",
+    Tool("nihilux_recent_projects", "Recently opened projects (name, path to pass to nihilux_open_project, board count, last modified, whether it still exists). Free.",
          _schema(), _READ, tool_recent_projects),
-    Tool("storyboard_close_project", "Close the open project (saving it) and return the user's Storyboarder window to its Home screen. Free.",
+    Tool("nihilux_close_project", "Close the open project (saving it) and return the user's Nihilux window to its Home screen. Free.",
          _schema(), _WRITE, tool_close_project),
-    Tool("storyboard_outline", "Project outline as JSON: per board in route order its id, number, title, description, dialogue, duration, prompt fields, has_image, latest image job and video take status. Free.",
+    Tool("nihilux_outline", "Project outline as JSON: per board in route order its id, number, title, description, dialogue, duration, prompt fields, has_image, latest image job and video take status. Free.",
          _schema({"route_id": _ROUTE_ID}), _READ, tool_outline),
-    Tool("storyboard_grid", "Numbered contact-sheet image of the boards (long edge <= 1600 px) plus a text legend. Free.",
+    Tool("nihilux_grid", "Numbered contact-sheet image of the boards (long edge <= 1600 px) plus a text legend. Free.",
          _schema({
              "route_id": _ROUTE_ID,
              "columns": {"type": "integer", "minimum": 1, "maximum": 12},
              "max_edge": {"type": "integer", "minimum": 256, "maximum": GRID_MAX_EDGE},
          }), _READ, tool_grid),
-    Tool("storyboard_board_image", "One board's current image (long edge <= 1280 px). Free.",
+    Tool("nihilux_board_image", "One board's current image (long edge <= 1280 px). Free.",
          _schema({"shot_id": _SHOT_ID}, ["shot_id"]), _READ, tool_board_image),
-    Tool("storyboard_add_board", "Create a board (after after_shot_id, or at the end) and set its fields; returns the board. Free.",
+    Tool("nihilux_add_board", "Create a board (after after_shot_id, or at the end) and set its fields; returns the board. Free.",
          _schema({"after_shot_id": {"type": "string", "description": "Insert after this board; omit to append."}, **_BOARD_FIELDS}),
          {**_WRITE, "idempotentHint": False}, tool_add_board),
-    Tool("storyboard_update_board", "Change a board's text fields, duration, prompt fields or shot design. Only the fields you pass change. Free.",
+    Tool("nihilux_update_board", "Change a board's text fields, duration, prompt fields or shot design. Only the fields you pass change. Free.",
          _schema({"shot_id": _SHOT_ID, **_BOARD_FIELDS}, ["shot_id"]), _WRITE, tool_update_board),
-    Tool("storyboard_delete_board", "Delete a board (undoable in the app). Free.",
+    Tool("nihilux_delete_board", "Delete a board (undoable in the app). Free.",
          _schema({"shot_id": _SHOT_ID}, ["shot_id"]), _DESTRUCTIVE, tool_delete_board),
-    Tool("storyboard_reorder_boards", "Set the board order: pass every board id in the new order. Free.",
+    Tool("nihilux_reorder_boards", "Set the board order: pass every board id in the new order. Free.",
          _schema({"shot_ids": {"type": "array", "items": {"type": "string"}, "minItems": 1}}, ["shot_ids"]), _WRITE, tool_reorder_boards),
-    Tool("storyboard_set_board_image", "Put a local image file (PNG/JPEG/WebP made by you or downloaded) onto a board, replacing its image like a user import. The file is read here and uploaded; Storyboarder never reads your path. Free.",
+    Tool("nihilux_set_board_image", "Put a local image file (PNG/JPEG/WebP made by you or downloaded) onto a board, replacing its image like a user import. The file is read here and uploaded; Nihilux never reads your path. Free.",
          _schema({"shot_id": _SHOT_ID, "path": {"type": "string", "description": "Local image file path on this machine."}}, ["shot_id", "path"]),
          _WRITE, tool_set_board_image),
-    Tool("storyboard_generate_image",
-         "Generate board image candidates on Comfy Cloud: text-to-image (Z-Image Turbo) without references, reference-to-image (Qwen-Image-Edit, up to 3 references) with them. Returns a job to poll with storyboard_image_jobs. Nothing replaces the board image until applied (or apply=true). " + CREDIT_NOTE,
+    Tool("nihilux_generate_image",
+         "Generate board image candidates on Comfy Cloud: text-to-image (Z-Image Turbo) without references, reference-to-image (Qwen-Image-Edit, up to 3 references) with them. Returns a job to poll with nihilux_image_jobs. Nothing replaces the board image until applied (or apply=true). " + CREDIT_NOTE,
          _schema({
              "shot_id": _SHOT_ID,
              "prompt": _STR,
@@ -670,14 +670,14 @@ TOOL_LIST: list[Tool] = [
              "seed": {"type": "integer", "minimum": 0},
              "apply": {"type": "boolean", "description": "Apply the first output to the board when the job succeeds."},
          }, ["shot_id", "prompt"]), _CLOUD, tool_generate_image),
-    Tool("storyboard_image_jobs", "Poll image generation jobs, for one board or the whole project. Free.",
+    Tool("nihilux_image_jobs", "Poll image generation jobs, for one board or the whole project. Free.",
          _schema({"shot_id": _SHOT_ID}), _READ, tool_image_jobs),
-    Tool("storyboard_image_candidate", "View one output image of a finished image job before applying it. Free.",
+    Tool("nihilux_image_candidate", "View one output image of a finished image job before applying it. Free.",
          _schema({"job_id": _STR, "index": {"type": "integer", "minimum": 0, "default": 0}}, ["job_id"]), _READ, tool_image_candidate),
-    Tool("storyboard_apply_image", "Make one output of a finished image job the board's image (like a user import; undoable). Free.",
+    Tool("nihilux_apply_image", "Make one output of a finished image job the board's image (like a user import; undoable). Free.",
          _schema({"job_id": _STR, "index": {"type": "integer", "minimum": 0, "default": 0}}, ["job_id"]), _WRITE, tool_apply_image),
-    Tool("storyboard_generate_video",
-         "Start a video take for a board on Comfy Cloud (Wan 2.2 image-to-video from the board image; with end_shot_id, a first+last-frame move to that board's image). Prompt defaults to the board's story and shot design. Returns the take; poll with storyboard_video_takes. " + CREDIT_NOTE,
+    Tool("nihilux_generate_video",
+         "Start a video take for a board on Comfy Cloud (Wan 2.2 image-to-video from the board image; with end_shot_id, a first+last-frame move to that board's image). Prompt defaults to the board's story and shot design. Returns the take; poll with nihilux_video_takes. " + CREDIT_NOTE,
          _schema({
              "shot_id": _SHOT_ID,
              "prompt": _STR,
@@ -685,9 +685,9 @@ TOOL_LIST: list[Tool] = [
              "seconds": {"type": "number", "minimum": 0.5, "maximum": 10, "description": "Defaults to the board duration."},
              "end_shot_id": {"type": "string", "description": "Board whose image is the last frame."},
          }, ["shot_id"]), _CLOUD, tool_generate_video),
-    Tool("storyboard_video_takes", "Poll video takes for one board, or every board when shot_id is omitted. Free.",
+    Tool("nihilux_video_takes", "Poll video takes for one board, or every board when shot_id is omitted. Free.",
          _schema({"shot_id": _SHOT_ID}), _READ, tool_video_takes),
-    Tool("storyboard_render_sequence",
+    Tool("nihilux_render_sequence",
          "Render one MP4 from each board's chosen succeeded video take, in board order (boards without a take become stills for their duration), into the project's Exports folder. Takes are cut to their board's duration unless trim_to_board is false. Returns the path, duration and per-board list (seconds used, take_seconds of the original take). Local ffmpeg, free.",
          _schema({
              "route_id": _ROUTE_ID,
@@ -697,16 +697,16 @@ TOOL_LIST: list[Tool] = [
              "trim_to_board": {"type": "boolean", "default": True,
                                "description": "Cut each take to its board's duration_seconds (whole frames at 16 fps; a shorter take is never extended). False plays every take in full."},
          }), {**_WRITE, "idempotentHint": False}, tool_render_sequence),
-    Tool("storyboard_list_generation_requests", "List Storyboarder generation requests, normally Codex handoffs waiting for work. Free.",
+    Tool("nihilux_list_generation_requests", "List Nihilux generation requests, normally Codex handoffs waiting for work. Free.",
          _schema({
              "shot_id": {"type": "string", "description": "Optional board id filter."},
              "destination": {"type": "string", "enum": ["codex", "queue"], "default": "codex"},
              "status": {"type": "string", "enum": ["queued", "needs-review", "completed", "failed", "cancelled"]},
          }), _READ, tool_list_generation_requests),
-    Tool("storyboard_get_generation_request", "Fetch one complete board generation package by request id. Free.",
+    Tool("nihilux_get_generation_request", "Fetch one complete board generation package by request id. Free.",
          _schema({"request_id": _STR}, ["request_id"]), _READ, tool_get_generation_request),
-    Tool("storyboard_submit_generation_result",
-         "Upload generated image files as the result of a generation request; Storyboarder imports them as a candidate for review. Free.",
+    Tool("nihilux_submit_generation_result",
+         "Upload generated image files as the result of a generation request; Nihilux imports them as a candidate for review. Free.",
          _schema({
              "request_id": _STR,
              "artifact_paths": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": MAX_GENERATION_ARTIFACTS},
@@ -717,11 +717,11 @@ TOOLS_BY_NAME = {tool.name: tool for tool in TOOL_LIST}
 TOOLS: list[dict[str, Any]] = [tool.spec() for tool in TOOL_LIST]
 
 INSTRUCTIONS = (
-    "Storyboarder must be running; check with storyboard_status. If no project is open, start one with storyboard_new_project "
-    "or open one with storyboard_open_project (these switch the project shown in the user's app window). "
-    "Read the board with storyboard_outline and storyboard_grid, edit boards with the add/update/delete/reorder tools, "
-    "put your own images on boards with storyboard_set_board_image, generate images and video takes on Comfy Cloud "
-    "(these spend the Owner's credits), poll jobs, and assemble a cut with storyboard_render_sequence. "
+    "Nihilux must be running; check with nihilux_status. If no project is open, start one with nihilux_new_project "
+    "or open one with nihilux_open_project (these switch the project shown in the user's app window). "
+    "Read the board with nihilux_outline and nihilux_grid, edit boards with the add/update/delete/reorder tools, "
+    "put your own images on boards with nihilux_set_board_image, generate images and video takes on Comfy Cloud "
+    "(these spend the Owner's credits), poll jobs, and assemble a cut with nihilux_render_sequence. "
     "Every change goes through the app and appears live in its UI. Never edit project files directly."
 )
 
@@ -775,7 +775,7 @@ def handle_message(message: dict[str, Any], *, client: StoryboarderClient | None
 
 
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Storyboarder MCP server (HTTP client of the running app)")
+    parser = argparse.ArgumentParser(description="Nihilux MCP server (HTTP client of the running app)")
     parser.add_argument("--bridge-file", default="", help="Live-bridge JSON to discover the app (default: the app's global bridge file).")
     return parser.parse_args(argv)
 

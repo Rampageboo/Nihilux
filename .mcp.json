@@ -1,12 +1,12 @@
 {
   "mcpServers": {
-    "storyboarder": {
+    "nihilux": {
       "type": "stdio",
-      "command": "D:/Projects/Nihilux/.venv/Scripts/python.exe",
-      "args": ["-m", "storyboard_tool.mcp_server"],
-      "env": {
-        "PYTHONPATH": "D:/Projects/Nihilux"
-      }
+      "command": "cmd",
+      "args": [
+        "/c",
+        "scripts\\nihilux-mcp.cmd"
+      ]
     }
   }
 }

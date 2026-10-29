@@ -141,7 +141,7 @@ installed from Microsoft if Windows lacks it.
   update, verifies its signature, closes the backend and installs it.
 - **Photoshop / Blender / agents:** **Settings → Integrations** installs the Photoshop
   panel (`.ccx`, through Creative Cloud), opens the Blender add-on folder, and copies
-  an MCP config that lets Claude Code or Codex drive the installed app.
+  a `nihilux` MCP config that lets Claude Code or Codex drive the installed app with `nihilux_*` tools (see [agent MCP](docs/agent_mcp.md)).
 
 Build the installer locally (Rust, Node 24 and the updater signing key needed):
 

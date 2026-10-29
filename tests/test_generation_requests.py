@@ -282,7 +282,9 @@ class TestGenerationRequests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         request_id = response.json()["request"]["request_id"]
         self.assertIn(request_id, response.json()["codex_prompt"])
-        self.assertIn("Storyboarder MCP", response.json()["codex_prompt"])
+        self.assertIn("Nihilux MCP", response.json()["codex_prompt"])
+        self.assertIn("nihilux_submit_generation_result", response.json()["codex_prompt"])
+        self.assertNotIn("storyboard_submit_generation_result", response.json()["codex_prompt"])
 
     def test_scene_name_character_and_shot_details_compile_without_scene_bible(self) -> None:
         settings = _quiet(lambda: self.client.patch(

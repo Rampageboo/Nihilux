@@ -1,0 +1,191 @@
+diff --git a/README.md b/README.md
+index e022bea..40bafa0 100644
+--- a/README.md
++++ b/README.md
+@@ -12,7 +12,7 @@
+ | `codex/AGENTS.md` | Codex | 全局：沟通、判断、线程与 subagent、两个 AI 的协作、环境 |
+ | `claude/CLAUDE.md` | Claude | 全局：沟通、判断、两个 AI 的协作、环境 |
+ | `shared/skills/skill-authoring` | 两者 | 写或改 skill 时先查本仓库，有则更新、无则新增，标明用于谁 |
+-| `shared/skills/storyboarder-filmmaking` | 两者 | 通过 Storyboarder 的 MCP 当导演：建项目、写 board、Comfy Cloud 生图（文生图/参考图）、看 grid、生视频、拼成片；每一步一个参考文件 |
++| `shared/skills/nihilux-filmmaking` | 两者 | 通过 Nihilux 的 MCP 当导演：建项目、写 board、Comfy Cloud 生图（文生图/参考图）、看 grid、生视频、拼成片；每一步一个参考文件 |
+ | `codex/skills/engineering-execution` | Codex | 写代码的原则 |
+ | `codex/skills/scoped-delegation` | Codex | 按范围拆成线程或 subagent，按难度选模型和 effort，状态回流 |
+ | `codex/skills/blender-asset-validation` | Codex | 按标准验证 Blender 资产、保存状态与导出；AI 来源硬表面游戏资产另验四边面、边环、交叉、UV 与造型保真 |
+diff --git a/shared/skills/storyboarder-filmmaking/SKILL.md b/shared/skills/nihilux-filmmaking/SKILL.md
+similarity index 66%
+rename from shared/skills/storyboarder-filmmaking/SKILL.md
+rename to shared/skills/nihilux-filmmaking/SKILL.md
+index d11e17c..290201d 100644
+--- a/shared/skills/storyboarder-filmmaking/SKILL.md
++++ b/shared/skills/nihilux-filmmaking/SKILL.md
+@@ -1,11 +1,11 @@
+ ---
+-name: storyboarder-filmmaking
+-description: Make storyboards, comics or short AI videos by driving the Owner's Storyboarder app through its MCP (storyboard_* tools) — create a project, write boards, generate keyframes and video takes on Comfy Cloud, review the grid, and assemble a cut. Use whenever an agent is asked to draw, storyboard, previs, or produce a short film/animatic in Storyboarder, or to review/edit an existing Storyboarder project.
++name: nihilux-filmmaking
++description: Make storyboards, comics or short AI videos by driving the Owner's Nihilux app through its MCP (nihilux_* tools) — create a project, write boards, generate keyframes and video takes on Comfy Cloud, review the grid, and assemble a cut. Use whenever an agent is asked to draw, storyboard, previs, or produce a short film/animatic in Nihilux, or to review/edit an existing Nihilux project.
+ ---
+ 
+-# Storyboarder filmmaking
++# Nihilux filmmaking
+ 
+-Storyboarder (repo `D:\Projects\Storyboarder`) is a desktop storyboard/comic app. Its MCP server
++Nihilux (repo `D:\Projects\Nihilux`) is a desktop storyboard/comic app. Its MCP server
+ (`storyboard_tool/mcp_server.py`, registered in the repo's `.mcp.json`; tool list in `docs/agent_mcp.md`)
+ is a client of the **running app**: every edit goes through the app's backend, shows up live in the
+ Owner's window, and is saved on return. Nothing to save, nothing to flush.
+@@ -21,15 +21,15 @@ obvious; read it when you reach the step.
+ 6. Assemble and check the cut — `references/06-assemble.md`
+ 
+ **Boundaries.**
+-- Comfy Cloud calls (`storyboard_generate_image`, `storyboard_generate_video`) spend the Owner's
++- Comfy Cloud calls (`nihilux_generate_image`, `nihilux_generate_video`) spend the Owner's
+   paid credits. Iterate on text and on the grid first; regenerate only what the review shows is wrong.
+   Typical cost/time per call: image ≈ 10–25 s, 3–4 s video take ≈ 25–40 s.
+-- `storyboard_new_project` / `storyboard_open_project` / `storyboard_close_project` switch the
++- `nihilux_new_project` / `nihilux_open_project` / `nihilux_close_project` switch the
+   project in the Owner's open window. Do not switch away from a project the Owner is working in
+   without saying so; for experiments create a new project in a scratch folder.
+ - Never ask for, read, or pass the Comfy Cloud API key. It lives in Windows Credential Manager and the
+-  app uses it; `storyboard_status` reports whether it is configured.
+-- When something in Storyboarder is broken or missing, report it with a reproduction (or fix it in the
++  app uses it; `nihilux_status` reports whether it is configured.
++- When something in Nihilux is broken or missing, report it with a reproduction (or fix it in the
+   repo if that is the task) instead of working around it silently.
+ 
+ **Done means** the Owner can open the project and see the boards, the chosen images, the takes, and
+diff --git a/shared/skills/storyboarder-filmmaking/references/01-setup.md b/shared/skills/nihilux-filmmaking/references/01-setup.md
+similarity index 62%
+rename from shared/skills/storyboarder-filmmaking/references/01-setup.md
+rename to shared/skills/nihilux-filmmaking/references/01-setup.md
+index 8ac3e55..35feb40 100644
+--- a/shared/skills/storyboarder-filmmaking/references/01-setup.md
++++ b/shared/skills/nihilux-filmmaking/references/01-setup.md
+@@ -2,18 +2,18 @@
+ 
+ - The MCP finds the app through the live-bridge file the app writes
+   (`%LOCALAPPDATA%\StoryboardTool\storyboard_live_bridge.json`: port + API token). If the app is not
+-  running every tool says "Open Storyboarder…". Start it with the desktop shortcut /
+-  `D:\Projects\Storyboarder\Storyboarder.vbs`, or for headless work run the backend yourself.
+-- Start with `storyboard_status`: app running, project open, board count, Comfy Cloud configured.
++  running every tool says "Open Nihilux…". Start it with the desktop shortcut /
++  `D:\Projects\Nihilux\Storyboarder.vbs`, or for headless work run the backend yourself.
++- Start with `nihilux_status`: app running, project open, board count, Comfy Cloud configured.
+ - No MCP tools loaded in this session (e.g. it started before `.mcp.json` existed)? Drive the same
+-  server from the shell: `D:/Projects/Storyboarder/.venv/Scripts/python.exe
+-  D:/Projects/Storyboarder/scripts/mcp_call.py <tool> --args '<json>' --save-images-dir <dir>`
++  server from the shell: `D:/Projects/Nihilux/.venv/Scripts/python.exe
++  D:/Projects/Nihilux/scripts/mcp_call.py <tool> --args '<json>' --save-images-dir <dir>`
+   (`--list` shows tools). Image results are saved as PNG files you can open to look at.
+ - On Windows, from a Python subprocess call that venv python + `mcp_call.py` directly; a bare `bash`
+   may resolve to WSL and see nothing.
+ - A project is a folder `<parent>/<Name>/<Name>.sbd` plus `Images/ PSD/ Blender/ Exports/ Videos/`.
+-  `storyboard_new_project {path: "<parent>/<Name>.sbd"}` creates it (the parent must exist, the name
+-  must be new); `storyboard_recent_projects` / `storyboard_open_project` reopen one.
++  `nihilux_new_project {path: "<parent>/<Name>.sbd"}` creates it (the parent must exist, the name
++  must be new); `nihilux_recent_projects` / `nihilux_open_project` reopen one.
+ - Canvas: pass `canvas_width`/`canvas_height` at creation (e.g. 1280×720 for 16:9 video). Image
+   generation sizes follow the canvas aspect.
+ - Isolated runs (tests, demos while the Owner's app is open): start your own backend with a different
+diff --git a/shared/skills/storyboarder-filmmaking/references/02-boards.md b/shared/skills/nihilux-filmmaking/references/02-boards.md
+similarity index 68%
+rename from shared/skills/storyboarder-filmmaking/references/02-boards.md
+rename to shared/skills/nihilux-filmmaking/references/02-boards.md
+index ecb607b..971a449 100644
+--- a/shared/skills/storyboarder-filmmaking/references/02-boards.md
++++ b/shared/skills/nihilux-filmmaking/references/02-boards.md
+@@ -2,14 +2,14 @@
+ 
+ - One board = one shot. Plan the whole piece before generating anything: beats, number of boards,
+   duration per board. For video, a take is 1–5 s, so a 10 s short is about 3 boards × 3.3–3.4 s.
+-- `storyboard_add_board` takes `title`, `description`, `duration_seconds`, `dialogue`, and notes
++- `nihilux_add_board` takes `title`, `description`, `duration_seconds`, `dialogue`, and notes
+   (`camera_note`, `action_note`, `character_note`, `lighting_note`, `transition_note`). Put the
+   framing and subject in `description`, the motion in `action_note`, the lens/angle in
+   `camera_note`: the app compiles these into the default video prompt
+-  (`storyboard_outline` shows it as `video_prompt`).
+-- `storyboard_update_board` patches only the fields you send. `prompt` sets a manual image prompt
++  (`nihilux_outline` shows it as `video_prompt`).
++- `nihilux_update_board` patches only the fields you send. `prompt` sets a manual image prompt
+   for the board (empty string returns it to automatic).
+ - Keep one look across the piece: decide the setting, palette, lens and a one-line character
+   description first and repeat them in every board's text.
+-- `storyboard_outline` is the cheap way to re-read the plan (order, durations, total seconds, what
++- `nihilux_outline` is the cheap way to re-read the plan (order, durations, total seconds, what
+   each board already has); use it instead of re-reading project files.
+diff --git a/shared/skills/storyboarder-filmmaking/references/03-keyframes.md b/shared/skills/nihilux-filmmaking/references/03-keyframes.md
+similarity index 76%
+rename from shared/skills/storyboarder-filmmaking/references/03-keyframes.md
+rename to shared/skills/nihilux-filmmaking/references/03-keyframes.md
+index 55a1f9f..0e49449 100644
+--- a/shared/skills/storyboarder-filmmaking/references/03-keyframes.md
++++ b/shared/skills/nihilux-filmmaking/references/03-keyframes.md
+@@ -1,9 +1,9 @@
+ # 3. Keyframes on Comfy Cloud
+ 
+-`storyboard_generate_image {shot_id, prompt, references?, seed?, apply?}` starts a job and returns at
+-once; poll `storyboard_image_jobs` until `succeeded`/`failed`. `apply: true` puts output 0 on the
+-board when it finishes; otherwise inspect it with `storyboard_image_candidate` and apply with
+-`storyboard_apply_image`.
++`nihilux_generate_image {shot_id, prompt, references?, seed?, apply?}` starts a job and returns at
++once; poll `nihilux_image_jobs` until `succeeded`/`failed`. `apply: true` puts output 0 on the
++board when it finishes; otherwise inspect it with `nihilux_image_candidate` and apply with
++`nihilux_apply_image`.
+ 
+ - **No references → Z-Image Turbo** (text→image, 8 steps, 1280 px long edge). Use it for the
+   first/establishing frame.
+@@ -21,4 +21,4 @@ board when it finishes; otherwise inspect it with `storyboard_image_candidate` a
+   - A reference-edit may ignore an unusual camera position ("from behind the robot"); if the framing
+     matters, state it first and simply, or accept a frame that tells the same story.
+ - Instead of generating, you may render an image yourself (code, a diagram, a downloaded asset) and
+-  put it on a board with `storyboard_set_board_image {shot_id, path}` (local PNG/JPG).
++  put it on a board with `nihilux_set_board_image {shot_id, path}` (local PNG/JPG).
+diff --git a/shared/skills/storyboarder-filmmaking/references/04-review.md b/shared/skills/nihilux-filmmaking/references/04-review.md
+similarity index 69%
+rename from shared/skills/storyboarder-filmmaking/references/04-review.md
+rename to shared/skills/nihilux-filmmaking/references/04-review.md
+index 180c48b..00b1299 100644
+--- a/shared/skills/storyboarder-filmmaking/references/04-review.md
++++ b/shared/skills/nihilux-filmmaking/references/04-review.md
+@@ -1,7 +1,7 @@
+ # 4. Review before video
+ 
+-- `storyboard_grid` returns a numbered contact sheet (board number, duration, title) plus a text
+-  legend; `storyboard_board_image` returns one board. Look at them — this is the cheapest point to
++- `nihilux_grid` returns a numbered contact sheet (board number, duration, title) plus a text
++  legend; `nihilux_board_image` returns one board. Look at them — this is the cheapest point to
+   catch problems.
+ - Check: the same character/props across boards, readable text, framing matches the board text,
+   the sequence reads as a story without dialogue, nothing anatomically broken.
+diff --git a/shared/skills/storyboarder-filmmaking/references/05-video.md b/shared/skills/nihilux-filmmaking/references/05-video.md
+similarity index 88%
+rename from shared/skills/storyboarder-filmmaking/references/05-video.md
+rename to shared/skills/nihilux-filmmaking/references/05-video.md
+index cffe62f..c6623c4 100644
+--- a/shared/skills/storyboarder-filmmaking/references/05-video.md
++++ b/shared/skills/nihilux-filmmaking/references/05-video.md
+@@ -1,7 +1,7 @@
+ # 5. Video takes
+ 
+-`storyboard_generate_video {shot_id, prompt?, seconds?, end_shot_id?}` makes a Wan 2.2 14B take on
+-Comfy Cloud from the board's image (832 px long edge, 16 fps, 4-step); poll `storyboard_video_takes`.
++`nihilux_generate_video {shot_id, prompt?, seconds?, end_shot_id?}` makes a Wan 2.2 14B take on
++Comfy Cloud from the board's image (832 px long edge, 16 fps, 4-step); poll `nihilux_video_takes`.
+ Takes are kept per board; nothing on the board changes.
+ 
+ - The prompt is **motion only**: what moves, how the camera moves, timing. The image already fixes
+diff --git a/shared/skills/storyboarder-filmmaking/references/06-assemble.md b/shared/skills/nihilux-filmmaking/references/06-assemble.md
+similarity index 91%
+rename from shared/skills/storyboarder-filmmaking/references/06-assemble.md
+rename to shared/skills/nihilux-filmmaking/references/06-assemble.md
+index fea9c82..55f687a 100644
+--- a/shared/skills/storyboarder-filmmaking/references/06-assemble.md
++++ b/shared/skills/nihilux-filmmaking/references/06-assemble.md
+@@ -1,6 +1,6 @@
+ # 6. Assemble and check the cut
+ 
+-- `storyboard_render_sequence {route_id?, shot_ids?, takes?: {shot_id: take_id}, trim_to_board?}`
++- `nihilux_render_sequence {route_id?, shot_ids?, takes?: {shot_id: take_id}, trim_to_board?}`
+   concatenates, in board order, each board's chosen take (default: newest succeeded) — or the board
+   still, held for its duration, when a board has no take. Output: `Exports/sequence_<time>.mp4`
+   (H.264, 16 fps, first take's size); the response lists each board's source and seconds.

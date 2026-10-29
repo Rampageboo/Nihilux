@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Call one Storyboarder MCP tool from the shell (for agents without MCP loaded).
+"""Call one Nihilux MCP tool from the shell (for agents without MCP loaded).
 
 Usage:
     python scripts/mcp_call.py --list
-    python scripts/mcp_call.py storyboard_status
-    python scripts/mcp_call.py storyboard_update_board --args '{"shot_id": "shot_1", "title": "Open"}'
-    python scripts/mcp_call.py storyboard_grid --save-images-dir out/
+    python scripts/mcp_call.py nihilux_status
+    python scripts/mcp_call.py nihilux_update_board --args '{"shot_id": "shot_1", "title": "Open"}'
+    python scripts/mcp_call.py nihilux_grid --save-images-dir out/
 
 Starts ``python -m storyboard_tool.mcp_server`` over stdio, sends initialize and
 one tools/call, prints text content, and saves image content as files (printing
@@ -49,7 +49,7 @@ def _rpc(proc: subprocess.Popen, message: dict) -> dict | None:
 def main(argv: list[str] | None = None) -> int:
     utf8_console()
     parser =argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("tool", nargs="?", help="Tool name, e.g. storyboard_outline.")
+    parser.add_argument("tool", nargs="?", help="Tool name, e.g. nihilux_outline.")
     parser.add_argument("--args", default="{}", help="Tool arguments as a JSON object, or @file.json.")
     parser.add_argument("--list", action="store_true", help="List the tools and their input schemas.")
     parser.add_argument("--save-images-dir", default="", help="Directory for image results (default: current directory).")

@@ -704,9 +704,9 @@ def codex_batch_handoff_prompt(request_ids: list[str], *, provider: str = "codex
     )
     return (
         backend_rule +
-        "Use the Storyboarder MCP tools to fetch and generate one storyboard image for every request ID below. "
+        "Use the Nihilux MCP tools to fetch and generate one storyboard image for every request ID below. "
         "For each request, inspect every matched keyword asset before generating, then submit its image with "
-        "storyboard_submit_generation_result. Do not edit shots.json directly.\n\n"
+        "nihilux_submit_generation_result. Do not edit shots.json directly.\n\n"
         "Request IDs:\n"
         + "\n".join(f"- {request_id}" for request_id in cleaned_ids)
     )
@@ -1072,19 +1072,19 @@ def codex_handoff_prompt(request_id: str, *, provider: str = "codex", mode: str 
             "You MUST operate Stable Diffusion for image generation. Do NOT use OpenAI imagegen, DALL-E, or any "
             "other image generator, even if earlier conversation context suggests one. The request provider is an "
             "execution constraint, not a preference. "
-            "Use the Storyboarder MCP tools to fetch generation request "
+            "Use the Nihilux MCP tools to fetch generation request "
             f"{request_id}. This request targets the Stable Diffusion provider in {mode_label} mode: operate "
             "Stable Diffusion to render the storyboard image rather than generating it directly. Follow the "
             "request's generation_plan for target size, steps, style, and output policy; build the positive prompt "
             "from compiled_prompt, apply its negative_prompt and every reference, preserve the panel aspect ratio, "
             "and upscale back to panel size when the plan requests it. If generation_plan.prior_frame is present, "
             "use it as the img2img base. Produce the requested number of variants, "
-            "then submit the image files with storyboard_submit_generation_result. Inspect every matched file in "
+            "then submit the image files with nihilux_submit_generation_result. Inspect every matched file in "
             "keyword_assets before generating. Do not edit shots.json directly."
         )
     return (
-        "Use the Storyboarder MCP tools to fetch generation request "
+        "Use the Nihilux MCP tools to fetch generation request "
         f"{request_id}, generate the requested storyboard image variants, then submit the image files "
-        "with storyboard_submit_generation_result. Inspect every matched file in keyword_assets before generating. "
+        "with nihilux_submit_generation_result. Inspect every matched file in keyword_assets before generating. "
         "Do not edit shots.json directly."
     )

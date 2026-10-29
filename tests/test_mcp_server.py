@@ -100,37 +100,45 @@ def test_initialize_and_tool_catalog() -> None:
     initialized = _rpc(client, "initialize", {"protocolVersion": "2025-06-18"})
     assert initialized["protocolVersion"] == "2025-06-18"
     assert "tools" in initialized["capabilities"]
+    assert initialized["serverInfo"]["name"] == "nihilux"
+    assert "Nihilux must be running" in initialized["instructions"]
+    assert "storyboard_" not in initialized["instructions"]
 
     tools = _rpc(client, "tools/list")["tools"]
     names = {tool["name"] for tool in tools}
     assert names == {
-        "storyboard_status", "storyboard_outline", "storyboard_grid", "storyboard_board_image",
-        "storyboard_add_board", "storyboard_update_board", "storyboard_delete_board",
-        "storyboard_reorder_boards", "storyboard_set_board_image", "storyboard_generate_image",
-        "storyboard_image_jobs", "storyboard_image_candidate", "storyboard_apply_image",
-        "storyboard_generate_video", "storyboard_video_takes", "storyboard_render_sequence",
-        "storyboard_list_generation_requests", "storyboard_get_generation_request",
-        "storyboard_submit_generation_result",
-        "storyboard_new_project", "storyboard_open_project", "storyboard_recent_projects",
-        "storyboard_close_project",
+        "nihilux_status", "nihilux_outline", "nihilux_grid", "nihilux_board_image",
+        "nihilux_add_board", "nihilux_update_board", "nihilux_delete_board",
+        "nihilux_reorder_boards", "nihilux_set_board_image", "nihilux_generate_image",
+        "nihilux_image_jobs", "nihilux_image_candidate", "nihilux_apply_image",
+        "nihilux_generate_video", "nihilux_video_takes", "nihilux_render_sequence",
+        "nihilux_list_generation_requests", "nihilux_get_generation_request",
+        "nihilux_submit_generation_result",
+        "nihilux_new_project", "nihilux_open_project", "nihilux_recent_projects",
+        "nihilux_close_project",
     }
     for tool in tools:
         assert tool["inputSchema"]["type"] == "object" and tool["description"]
-        if tool["name"] in {"storyboard_generate_image", "storyboard_generate_video"}:
+        assert tool["name"].startswith("nihilux_")
+        assert "Storyboarder" not in tool["description"]
+        if tool["name"] in {"nihilux_generate_image", "nihilux_generate_video"}:
             assert "Comfy Cloud credits" in tool["description"]
-        if tool["name"] in {"storyboard_new_project", "storyboard_open_project"}:
-            assert "user's Storyboarder window" in tool["description"]
-    unknown = _rpc(client, "tools/call", {"name": "storyboard_nope", "arguments": {}})
+        if tool["name"] in {"nihilux_new_project", "nihilux_open_project"}:
+            assert "user's Nihilux window" in tool["description"]
+    unknown = _rpc(client, "tools/call", {"name": "nihilux_nope", "arguments": {}})
     assert unknown["isError"] is True
+    legacy = _rpc(client, "tools/call", {"name": "storyboard_status", "arguments": {}})
+    assert legacy["isError"] is True
 
 
 # ── discovery ────────────────────────────────────────────────────────────────
 
-def test_missing_bridge_says_open_storyboarder_first(bridge_file) -> None:
+def test_missing_bridge_says_open_nihilux_first(bridge_file) -> None:
     client = StoryboarderClient(transport=lambda *a: pytest.fail("must not call HTTP"))
 
-    assert mcp_server.NOT_RUNNING in _error(_call(client, "storyboard_outline"))
-    status = _value(_call(client, "storyboard_status"))
+    assert "Open Nihilux first" in mcp_server.NOT_RUNNING
+    assert mcp_server.NOT_RUNNING in _error(_call(client, "nihilux_outline"))
+    status = _value(_call(client, "nihilux_status"))
     assert status["app_running"] is False and mcp_server.NOT_RUNNING in status["message"]
 
 
@@ -141,7 +149,7 @@ def test_stale_bridge_with_nothing_listening_is_reported_as_not_running(bridge_f
     _write_bridge(bridge_file, port=port)
     client = StoryboarderClient()  # real urllib transport
 
-    message = _error(_call(client, "storyboard_board_image", shot_id="shot_1"))
+    message = _error(_call(client, "nihilux_board_image", shot_id="shot_1"))
 
     assert "not reachable" in message and mcp_server.NOT_RUNNING in message
 
@@ -150,7 +158,7 @@ def test_stale_bridge_with_nothing_listening_is_reported_as_not_running(bridge_f
 
 def test_status_reports_project_and_comfy(backend) -> None:
     _http, client = backend
-    status = _value(_call(client, "storyboard_status"))
+    status = _value(_call(client, "nihilux_status"))
     assert status == {
         "app_running": True,
         "project_open": True,
@@ -164,63 +172,63 @@ def test_project_lifecycle_switches_the_app_project(backend, tmp_path) -> None:
     _http, client = backend
     (tmp_path / "work").mkdir()
 
-    created = _value(_call(client, "storyboard_new_project", path=str(tmp_path / "work" / "Film.sbd"),
+    created = _value(_call(client, "nihilux_new_project", path=str(tmp_path / "work" / "Film.sbd"),
                            project_type="video", canvas_width=1280, canvas_height=720))
     assert created["name"] == "Film" and created["board_count"] == 0
     film_path = Path(created["project_path"])
     assert film_path.is_file() and film_path == tmp_path / "work" / "Film" / "Film.sbd"
-    status = _value(_call(client, "storyboard_status"))
+    status = _value(_call(client, "nihilux_status"))
     assert status["project_open"] is True and status["project_name"] == "Film"
 
-    _value(_call(client, "storyboard_add_board", title="Opening"))
-    assert _value(_call(client, "storyboard_status"))["board_count"] == 1
+    _value(_call(client, "nihilux_add_board", title="Opening"))
+    assert _value(_call(client, "nihilux_status"))["board_count"] == 1
 
-    demo = _value(_call(client, "storyboard_open_project", path=str(tmp_path / "Demo")))
+    demo = _value(_call(client, "nihilux_open_project", path=str(tmp_path / "Demo")))
     assert demo["name"] == "Demo" and demo["board_count"] == 0
-    assert _value(_call(client, "storyboard_status"))["project_name"] == "Demo"
+    assert _value(_call(client, "nihilux_status"))["project_name"] == "Demo"
 
-    recents = _value(_call(client, "storyboard_recent_projects"))["recents"]
+    recents = _value(_call(client, "nihilux_recent_projects"))["recents"]
     by_name = {row["name"]: row for row in recents}
     assert {"Film", "Demo"} <= set(by_name)
     assert by_name["Film"]["boards"] == 1 and by_name["Film"]["exists"] is True
     assert Path(by_name["Film"]["path"]) == film_path and by_name["Film"]["modified"]
     assert "thumbnail" not in by_name["Film"]
 
-    reopened = _value(_call(client, "storyboard_open_project", path=by_name["Film"]["path"]))
+    reopened = _value(_call(client, "nihilux_open_project", path=by_name["Film"]["path"]))
     assert reopened["name"] == "Film" and reopened["board_count"] == 1
 
-    assert _value(_call(client, "storyboard_close_project")) == {"closed": True}
-    status = _value(_call(client, "storyboard_status"))
+    assert _value(_call(client, "nihilux_close_project")) == {"closed": True}
+    status = _value(_call(client, "nihilux_status"))
     assert status["project_open"] is False
-    assert "storyboard_new_project" in status["message"] and "storyboard_open_project" in status["message"]
-    assert "storyboard_open_project" in _error(_call(client, "storyboard_outline"))
-    assert _value(_call(client, "storyboard_close_project")) == {"closed": False}
+    assert "nihilux_new_project" in status["message"] and "nihilux_open_project" in status["message"]
+    assert "nihilux_open_project" in _error(_call(client, "nihilux_outline"))
+    assert _value(_call(client, "nihilux_close_project")) == {"closed": False}
 
-    assert "project_type" in _error(_call(client, "storyboard_new_project", path=str(tmp_path / "x.sbd"), project_type="film"))
-    assert "HTTP 400" in _error(_call(client, "storyboard_open_project", path=str(tmp_path / "missing.sbd")))
+    assert "project_type" in _error(_call(client, "nihilux_new_project", path=str(tmp_path / "x.sbd"), project_type="film"))
+    assert "HTTP 400" in _error(_call(client, "nihilux_open_project", path=str(tmp_path / "missing.sbd")))
 
 
 def test_token_is_sent_and_a_wrong_token_surfaces_the_backend_detail(backend, bridge_file) -> None:
     _http, client = backend
     _write_bridge(bridge_file, token="wrong-token")
 
-    message = _error(_call(client, "storyboard_add_board", title="x"))
+    message = _error(_call(client, "nihilux_add_board", title="x"))
 
     assert "HTTP 403" in message and "Missing or invalid API token" in message
 
 
 def test_board_lifecycle_preserves_untouched_fields(backend) -> None:
     http, client = backend
-    first = _value(_call(client, "storyboard_add_board", title="Opening", description="A match flares.",
+    first = _value(_call(client, "nihilux_add_board", title="Opening", description="A match flares.",
                          dialogue="Who's there?", duration_seconds=2.5, prompt="ink sketch, dark room"))["board"]
     assert first["number"] == 1 and first["title"] == "Opening"
     assert first["duration_seconds"] == 2.5 and first["prompt"] == "ink sketch, dark room"
 
-    second = _value(_call(client, "storyboard_add_board", title="Reveal"))["board"]
-    third = _value(_call(client, "storyboard_add_board", after_shot_id=first["shot_id"], title="Between"))
+    second = _value(_call(client, "nihilux_add_board", title="Reveal"))["board"]
+    third = _value(_call(client, "nihilux_add_board", after_shot_id=first["shot_id"], title="Between"))
     assert third["board"]["number"] == 2 and third["board_count"] == 3
 
-    updated = _value(_call(client, "storyboard_update_board", shot_id=first["shot_id"], title="Cold open",
+    updated = _value(_call(client, "nihilux_update_board", shot_id=first["shot_id"], title="Cold open",
                            shot_design={"camera_movement": "slow push in"}))["board"]
     assert updated["title"] == "Cold open"
     # PATCH replaces declared fields, so the server must send the board's current values back.
@@ -230,50 +238,50 @@ def test_board_lifecycle_preserves_untouched_fields(backend) -> None:
     assert stored["shot_design"]["camera_movement"] == "slow push in"
     assert stored["prompt_config"]["mode"] == "manual"
 
-    assert "Nothing to update" in _error(_call(client, "storyboard_update_board", shot_id=first["shot_id"]))
+    assert "Nothing to update" in _error(_call(client, "nihilux_update_board", shot_id=first["shot_id"]))
 
     order = [second["shot_id"], first["shot_id"], third["board"]["shot_id"]]
-    reordered = _value(_call(client, "storyboard_reorder_boards", shot_ids=order))["boards"]
+    reordered = _value(_call(client, "nihilux_reorder_boards", shot_ids=order))["boards"]
     assert [row["shot_id"] for row in reordered] == order
 
-    deleted = _value(_call(client, "storyboard_delete_board", shot_id=second["shot_id"]))
+    deleted = _value(_call(client, "nihilux_delete_board", shot_id=second["shot_id"]))
     assert deleted == {"deleted": second["shot_id"], "board_count": 2}
-    assert "Board not found" in _error(_call(client, "storyboard_update_board", shot_id="missing", title="x"))
-    assert "HTTP 404" in _error(_call(client, "storyboard_delete_board", shot_id="missing"))
+    assert "Board not found" in _error(_call(client, "nihilux_update_board", shot_id="missing", title="x"))
+    assert "HTTP 404" in _error(_call(client, "nihilux_delete_board", shot_id="missing"))
 
 
 def test_set_board_image_uploads_bytes_and_board_image_returns_capped_png(backend, tmp_path) -> None:
     _http, client = backend
-    board = _value(_call(client, "storyboard_add_board", title="Wide"))["board"]
+    board = _value(_call(client, "nihilux_add_board", title="Wide"))["board"]
     assert board["has_image"] is False
-    assert "HTTP 404" in _error(_call(client, "storyboard_board_image", shot_id=board["shot_id"]))
+    assert "HTTP 404" in _error(_call(client, "nihilux_board_image", shot_id=board["shot_id"]))
 
     source = _png(tmp_path / "agent render.png", size=(2400, 1350))
-    result = _value(_call(client, "storyboard_set_board_image", shot_id=board["shot_id"], path=str(source)))
+    result = _value(_call(client, "nihilux_set_board_image", shot_id=board["shot_id"], path=str(source)))
     assert result["board"]["has_image"] is True
 
-    image_result = _call(client, "storyboard_board_image", shot_id=board["shot_id"])
+    image_result = _call(client, "nihilux_board_image", shot_id=board["shot_id"])
     assert image_result["isError"] is False
     image = _decoded_image(image_result["content"][-1])
     assert max(image.size) <= mcp_server.BOARD_MAX_EDGE
 
-    missing = _error(_call(client, "storyboard_set_board_image", shot_id=board["shot_id"], path=str(tmp_path / "nope.png")))
+    missing = _error(_call(client, "nihilux_set_board_image", shot_id=board["shot_id"], path=str(tmp_path / "nope.png")))
     assert "not found" in missing
 
 
 def test_video_takes_and_generation_errors_come_from_the_backend(backend) -> None:
     _http, client = backend
-    board = _value(_call(client, "storyboard_add_board", title="Walk", description="She walks away."))["board"]
+    board = _value(_call(client, "nihilux_add_board", title="Walk", description="She walks away."))["board"]
 
-    assert _value(_call(client, "storyboard_video_takes", shot_id=board["shot_id"])) == {"takes": []}
-    assert _value(_call(client, "storyboard_video_takes")) == {"takes": []}
+    assert _value(_call(client, "nihilux_video_takes", shot_id=board["shot_id"])) == {"takes": []}
+    assert _value(_call(client, "nihilux_video_takes")) == {"takes": []}
     # No Comfy key configured: the backend's own message reaches the agent.
-    assert "API key" in _error(_call(client, "storyboard_generate_video", shot_id=board["shot_id"]))
+    assert "API key" in _error(_call(client, "nihilux_generate_video", shot_id=board["shot_id"]))
 
 
 def test_generation_handoff_tools_work_over_http(backend) -> None:
     http, client = backend
-    board = _value(_call(client, "storyboard_add_board", description="A lone figure crosses the bridge"))["board"]
+    board = _value(_call(client, "nihilux_add_board", description="A lone figure crosses the bridge"))["board"]
     created = http.post(
         f"/api/shots/{board['shot_id']}/generation-requests",
         json={"destination": "codex"},
@@ -281,25 +289,25 @@ def test_generation_handoff_tools_work_over_http(backend) -> None:
     )
     assert created.status_code == 200, created.text
 
-    rows = _value(_call(client, "storyboard_list_generation_requests"))["requests"]
+    rows = _value(_call(client, "nihilux_list_generation_requests"))["requests"]
     assert len(rows) == 1 and rows[0]["shot_id"] == board["shot_id"]
-    fetched = _value(_call(client, "storyboard_get_generation_request", request_id=rows[0]["request_id"]))
+    fetched = _value(_call(client, "nihilux_get_generation_request", request_id=rows[0]["request_id"]))
     assert fetched["request_id"] == rows[0]["request_id"]
     assert fetched["prompt"]["compiled_prompt"] == rows[0]["prompt"]["compiled_prompt"]
     assert fetched["output_contract"]["kind"] == "storyboard-image" and fetched["results"] == []
-    missing = _error(_call(client, "storyboard_get_generation_request", request_id="gen_missing"))
+    missing = _error(_call(client, "nihilux_get_generation_request", request_id="gen_missing"))
     assert "HTTP 404" in missing and "not found" in missing
 
 
 def _codex_request(http, client) -> tuple[str, str]:
-    board = _value(_call(client, "storyboard_add_board", description="Rain on the harbour"))["board"]
+    board = _value(_call(client, "nihilux_add_board", description="Rain on the harbour"))["board"]
     created = http.post(
         f"/api/shots/{board['shot_id']}/generation-requests",
         json={"destination": "codex"},
         headers={"x-storyboarder-token": TOKEN},
     )
     assert created.status_code == 200, created.text
-    return board["shot_id"], _value(_call(client, "storyboard_list_generation_requests"))["requests"][0]["request_id"]
+    return board["shot_id"], _value(_call(client, "nihilux_list_generation_requests"))["requests"][0]["request_id"]
 
 
 def test_submit_generation_result_over_http_imports_the_candidate(backend, tmp_path) -> None:
@@ -308,7 +316,7 @@ def test_submit_generation_result_over_http_imports_the_candidate(backend, tmp_p
     first = _png(tmp_path / "take one.png")
     second = _png(tmp_path / "take two.jpg", color=(10, 200, 90))
 
-    submitted = _value(_call(client, "storyboard_submit_generation_result", request_id=request_id,
+    submitted = _value(_call(client, "nihilux_submit_generation_result", request_id=request_id,
                              artifact_paths=[str(first), str(second)], summary="two candidates"))
 
     result = submitted["result"]
@@ -320,7 +328,7 @@ def test_submit_generation_result_over_http_imports_the_candidate(backend, tmp_p
         assert stored.is_file() and artifact["project_relative_path"].startswith("Images/Generated/")
     assert Path(result["artifacts"][0]["absolute_path"]).read_bytes() == first.read_bytes()
     assert submitted["request"]["latest_result"]["result_id"] == result["result_id"]
-    fetched = _value(_call(client, "storyboard_get_generation_request", request_id=request_id))
+    fetched = _value(_call(client, "nihilux_get_generation_request", request_id=request_id))
     assert [row["result_id"] for row in fetched["results"]] == [result["result_id"]]
 
     # The result-inbox watcher's pull puts the candidate on the board for review.
@@ -336,15 +344,15 @@ def test_submit_generation_result_validates_like_a_deposit(backend, tmp_path) ->
     text = tmp_path / "notes.txt"
     text.write_text("hello", encoding="utf-8")
 
-    assert "HTTP 400" in _error(_call(client, "storyboard_submit_generation_result",
+    assert "HTTP 400" in _error(_call(client, "nihilux_submit_generation_result",
                                       request_id=request_id, artifact_paths=[str(fake)]))
-    assert "Unsupported artifact format" in _error(_call(client, "storyboard_submit_generation_result",
+    assert "Unsupported artifact format" in _error(_call(client, "nihilux_submit_generation_result",
                                                          request_id=request_id, artifact_paths=[str(text)]))
-    missing = _error(_call(client, "storyboard_submit_generation_result",
+    missing = _error(_call(client, "nihilux_submit_generation_result",
                            request_id="gen_missing", artifact_paths=[str(_png(tmp_path / "a.png"))]))
     assert "HTTP 404" in missing
     # Nothing was deposited by the rejected uploads.
-    assert _value(_call(client, "storyboard_get_generation_request", request_id=request_id))["results"] == []
+    assert _value(_call(client, "nihilux_get_generation_request", request_id=request_id))["results"] == []
 
     nine = [("files", (f"{index}.png", _png(tmp_path / f"{index}.png").read_bytes(), "image/png")) for index in range(9)]
     too_many = http.post(f"/api/generation/requests/{request_id}/results", files=nine,
@@ -356,7 +364,7 @@ def test_submit_generation_result_validates_like_a_deposit(backend, tmp_path) ->
 
     deleted = http.delete(f"/api/generation/requests/{request_id}", headers={"x-storyboarder-token": TOKEN})
     assert deleted.status_code == 200, deleted.text
-    late = _error(_call(client, "storyboard_submit_generation_result",
+    late = _error(_call(client, "nihilux_submit_generation_result",
                         request_id=request_id, artifact_paths=[str(tmp_path / "a.png")]))
     # Deleted requests are gone (or, if Windows held the file, cancelled): no late result either way.
     assert "HTTP 404" in late or "no longer accepting" in late
@@ -369,11 +377,11 @@ def test_mcp_call_prints_non_ascii_on_a_cp1252_console(tmp_path) -> None:
     import sys
 
     root = Path(__file__).resolve().parents[1]
-    # A missing bridge under a non-ASCII folder: storyboard_status echoes the path back.
+    # A missing bridge under a non-ASCII folder: nihilux_status echoes the path back.
     bridge = tmp_path / "Bühne 分镜" / "bridge.json"
     env = {**os.environ, "PYTHONIOENCODING": "cp1252", "PYTHONUTF8": "0"}
     completed = subprocess.run(
-        [sys.executable, str(root / "scripts" / "mcp_call.py"), "storyboard_status", "--bridge-file", str(bridge)],
+        [sys.executable, str(root / "scripts" / "mcp_call.py"), "nihilux_status", "--bridge-file", str(bridge)],
         cwd=root, env=env, capture_output=True, timeout=60, check=False,
     )
     assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
@@ -425,8 +433,8 @@ def test_outline_and_grid_requests(recorder) -> None:
         ("GET", "/api/project/grid.png"): _png_response(),
     })
 
-    assert _value(_call(client, "storyboard_outline", route_id="main")) == outline
-    grid = _call(client, "storyboard_grid", route_id="main", columns=4, max_edge=4000)
+    assert _value(_call(client, "nihilux_outline", route_id="main")) == outline
+    grid = _call(client, "nihilux_grid", route_id="main", columns=4, max_edge=4000)
 
     assert rec.calls[0]["path"] == "/api/project/outline" and rec.calls[0]["query"] == {"route_id": ["main"]}
     grid_call = rec.calls[1]
@@ -441,12 +449,12 @@ def test_outline_and_grid_requests(recorder) -> None:
 def test_image_job_requests(recorder) -> None:
     rec, client = recorder({("GET", "/api/image-jobs/img_1/outputs/2"): _png_response((64, 64))})
 
-    _value(_call(client, "storyboard_generate_image", shot_id="s 1", prompt="a red door",
+    _value(_call(client, "nihilux_generate_image", shot_id="s 1", prompt="a red door",
                  references=["s0", "ref_abc"], seed=7, apply=True))
-    _value(_call(client, "storyboard_image_jobs", shot_id="s1"))
-    _value(_call(client, "storyboard_image_jobs"))
-    candidate = _call(client, "storyboard_image_candidate", job_id="img_1", index=2)
-    _value(_call(client, "storyboard_apply_image", job_id="img_1", index=1))
+    _value(_call(client, "nihilux_image_jobs", shot_id="s1"))
+    _value(_call(client, "nihilux_image_jobs"))
+    candidate = _call(client, "nihilux_image_candidate", job_id="img_1", index=2)
+    _value(_call(client, "nihilux_apply_image", job_id="img_1", index=1))
 
     create, per_shot, all_jobs, output, apply = rec.calls
     assert (create["method"], create["path"]) == ("POST", "/api/shots/s%201/image-jobs")
@@ -462,9 +470,9 @@ def test_image_job_requests(recorder) -> None:
 def test_render_sequence_and_video_take_requests(recorder) -> None:
     rec, client = recorder({("POST", "/api/project/sequence/render"): _json({"path": "Exports/x.mp4", "duration_seconds": 9.5, "boards": []})})
 
-    rendered = _value(_call(client, "storyboard_render_sequence", route_id="main", takes={"s1": "vid_1"}))
-    _value(_call(client, "storyboard_generate_video", shot_id="s1", seconds=3, end_shot_id="s2"))
-    _value(_call(client, "storyboard_render_sequence", trim_to_board=False))
+    rendered = _value(_call(client, "nihilux_render_sequence", route_id="main", takes={"s1": "vid_1"}))
+    _value(_call(client, "nihilux_generate_video", shot_id="s1", seconds=3, end_shot_id="s2"))
+    _value(_call(client, "nihilux_render_sequence", trim_to_board=False))
 
     render, video, untrimmed = rec.calls
     assert (render["method"], render["path"]) == ("POST", "/api/project/sequence/render")
@@ -480,7 +488,7 @@ def test_submit_generation_result_uploads_files(recorder, tmp_path) -> None:
     first = _png(tmp_path / "a.png")
     second = _png(tmp_path / "b.png", color=(1, 2, 3))
 
-    _value(_call(client, "storyboard_submit_generation_result", request_id="gen_1",
+    _value(_call(client, "nihilux_submit_generation_result", request_id="gen_1",
                  artifact_paths=[str(first), str(second)], summary="two takes"))
 
     call = rec.calls[0]
@@ -492,4 +500,4 @@ def test_submit_generation_result_uploads_files(recorder, tmp_path) -> None:
 
 def test_missing_endpoint_is_explained(recorder) -> None:
     _rec, client = recorder({("GET", "/api/project/outline"): HttpResponse(404, "application/json", b'{"detail":"Not Found"}')})
-    assert "may not have this endpoint" in _error(_call(client, "storyboard_outline"))
+    assert "may not have this endpoint" in _error(_call(client, "nihilux_outline"))
