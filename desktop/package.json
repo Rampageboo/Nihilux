@@ -1,7 +1,7 @@
 {
   "name": "nihilux-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Nihilux desktop shell (Tauri 2): starts the Python backend and shows the app.",
   "scripts": {
     "tauri": "tauri",
