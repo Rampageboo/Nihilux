@@ -4,7 +4,7 @@ import { loadShotDrawingProject } from '../api'
 
 type DrawingTool = 'select' | 'pen' | 'eraser' | 'hand'
 type FabricModule = typeof import('fabric')
-type EditorObject = FabricObject & { storyboardId?: string; storyboardName?: string; storyboardLocked?: boolean }
+type EditorObject = FabricObject & { storyboardId?: string; storyboardName?: string; storyboardLocked?: boolean; storyboardDrawingLayer?: boolean }
 
 interface FullDrawingEditorProps {
   shotId: string
@@ -28,7 +28,7 @@ interface NativeDrawingDocument {
   canvas: Record<string, unknown>
 }
 
-const SERIALIZED_PROPERTIES = ['storyboardId', 'storyboardName', 'storyboardLocked']
+const SERIALIZED_PROPERTIES = ['storyboardId', 'storyboardName', 'storyboardLocked', 'storyboardDrawingLayer']
 
 function setObjectLocked(object: EditorObject, locked: boolean) {
   object.storyboardLocked = locked
@@ -109,7 +109,12 @@ export function FullDrawingEditor({
   const [zoom, setZoom] = useState(1)
   const [viewportSize, setViewportSize] = useState({ width: 1, height: 1 })
   const [layers, setLayers] = useState<DrawingLayer[]>([])
-  const [activeLayerId, setActiveLayerId] = useState('')
+  const [activeLayerId, setActiveLayerState] = useState('')
+  const activeLayerIdRef = useRef('')
+  const setActiveLayerId = useCallback((id: string) => {
+    activeLayerIdRef.current = id
+    setActiveLayerState(id)
+  }, [])
   const [ready, setReady] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -122,19 +127,38 @@ export function FullDrawingEditor({
     const canvas = canvasRef.current
     if (!canvas) return
     const objects = canvas.getObjects() as EditorObject[]
+    if (!objects.some(object => object.storyboardId === activeLayerIdRef.current)) {
+      setActiveLayerId(objects.findLast(object => object.storyboardDrawingLayer)?.storyboardId || '')
+    }
     setLayers(objects.map((object, index) => ({
       id: object.storyboardId || '',
       name: layerName(object, index),
       visible: object.visible !== false,
       locked: object.storyboardLocked === true,
-      kind: object.globalCompositeOperation === 'destination-out' ? 'Eraser'
+      kind: object.storyboardDrawingLayer ? 'Drawing layer'
+        : object.globalCompositeOperation === 'destination-out' ? 'Eraser'
         : object.type === 'image' ? 'Image'
         : object.type === 'rect' ? 'Rectangle'
         : object.type === 'ellipse' ? 'Ellipse'
         : object.type === 'line' ? 'Line'
         : object.type === 'i-text' || object.type === 'textbox' ? 'Text' : 'Stroke',
     })).reverse())
-  }, [])
+  }, [setActiveLayerId])
+
+  const createDrawingLayer = useCallback(() => {
+    const canvas = canvasRef.current
+    const fabric = fabricRef.current
+    if (!canvas || !fabric) return
+    strokeCountRef.current += 1
+    const layer = new fabric.Group([], { subTargetCheck: false, interactive: false }) as EditorObject
+    Object.assign(layer, {
+      storyboardId: makeObjectId(), storyboardName: `Drawing ${strokeCountRef.current}`,
+      storyboardDrawingLayer: true,
+    })
+    canvas.add(layer)
+    setActiveLayerId(layer.storyboardId!)
+    return layer
+  }, [setActiveLayerId])
 
   const serializeCanvas = useCallback((): string => {
     const canvas = canvasRef.current
@@ -278,12 +302,19 @@ export function FullDrawingEditor({
 
         canvas.on('path:created', ({ path }) => {
           const object = path as EditorObject
-          const erasing = object.globalCompositeOperation === 'destination-out'
-          strokeCountRef.current += 1
-          Object.assign(object, {
-            storyboardId: makeObjectId(),
-            storyboardName: `${erasing ? 'Eraser' : 'Drawing'} ${strokeCountRef.current}`,
-          })
+          let layer = (canvas!.getObjects() as EditorObject[]).find(item => item.storyboardId === activeLayerIdRef.current)
+          if (layer?.storyboardDrawingLayer && (layer.storyboardLocked || layer.visible === false)) {
+            canvas!.remove(object)
+            onError(new Error('Select a visible, unlocked drawing layer before drawing.'))
+            return
+          }
+          if (!layer?.storyboardDrawingLayer) layer = createDrawingLayer()
+          if (!layer || !(layer instanceof fabric.Group)) return
+          // Fabric creates one path per gesture. Keep those editable paths inside
+          // the selected layer instead of exposing each stroke as a new layer.
+          canvas!.remove(object)
+          layer.add(object)
+          layer.setCoords()
           canvas!.requestRenderAll()
           commitHistory()
         })
@@ -291,7 +322,8 @@ export function FullDrawingEditor({
         canvas.on('text:editing:exited', commitHistory)
         canvas.on('selection:created', ({ selected }) => setActiveLayerId((selected?.[0] as EditorObject)?.storyboardId || ''))
         canvas.on('selection:updated', ({ selected }) => setActiveLayerId((selected?.[0] as EditorObject)?.storyboardId || ''))
-        canvas.on('selection:cleared', () => setActiveLayerId(''))
+        // Switching to a brush clears Fabric's object selection, but must retain
+        // the drawing target selected in the Layers panel.
 
         resetRef.current = async () => {
           if (operationBusyRef.current) return
@@ -332,7 +364,7 @@ export function FullDrawingEditor({
       brushFactoryRef.current = null
       void canvas?.dispose()
     }
-  }, [applyTool, artworkImage, boardBackgroundImage, canvasColor, codexImage, commitHistory, height, onError, serializeCanvas, shotId, updateHistoryControls, updateLayers, width])
+  }, [applyTool, artworkImage, boardBackgroundImage, canvasColor, codexImage, commitHistory, createDrawingLayer, height, onError, serializeCanvas, setActiveLayerId, shotId, updateHistoryControls, updateLayers, width])
 
   const restoreSnapshot = useCallback(async (snapshot: string) => {
     const canvas = canvasRef.current
@@ -557,7 +589,7 @@ export function FullDrawingEditor({
       else if (key === 'e') applyTool('eraser')
       else if (key === 'h') applyTool('hand')
       else if (key === '[' || key === ']') { event.preventDefault(); setBrushSize((size) => Math.max(1, Math.min(80, size + (key === '[' ? -1 : 1)))) }
-      else if (key === 'escape') { canvasRef.current?.discardActiveObject(); canvasRef.current?.requestRenderAll(); setActiveLayerId('') }
+      else if (key === 'escape') { canvasRef.current?.discardActiveObject(); canvasRef.current?.requestRenderAll() }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => { document.body.classList.remove('storyboard-drawing-active'); window.removeEventListener('keydown', handleKeyDown) }
@@ -681,7 +713,16 @@ export function FullDrawingEditor({
           </div>
         </div>
         {layersOpen ? <aside className="native-drawing-layers" aria-label="Drawing layers">
-          <div className="native-drawing-layers-heading"><strong>Layers</strong><span>{layers.length}</span></div>
+          <div className="native-drawing-layers-heading"><strong>Layers</strong><span>{layers.length}</span><button type="button" disabled={controlsDisabled} onClick={() => {
+            const canvas = canvasRef.current
+            if (!canvas) return
+            const brush = canvas.freeDrawingBrush
+            if (brush && 'finish' in brush && typeof brush.finish === 'function') brush.finish()
+            finishTextEditing(canvas)
+            canvas.discardActiveObject()
+            createDrawingLayer()
+            commitHistory()
+          }}>New layer</button></div>
           <div className="native-drawing-layer-list">
             {layers.length ? layers.map((layer, index) => (
               <div key={layer.id || `${layer.name}-${index}`} className={`native-drawing-layer${activeLayerId === layer.id ? ' is-active' : ''}`}>
